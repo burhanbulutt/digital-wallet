@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/VirtualCard.Api/VirtualCard.Api.csproj" />
+    <Project Path="src/VirtualCard.Application/VirtualCard.Application.csproj" />
+    <Project Path="src/VirtualCard.Domain/VirtualCard.Domain.csproj" />
+    <Project Path="src/VirtualCard.Infrastructure/VirtualCard.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/VirtualCard.Tests/VirtualCard.Tests.csproj" />
+  </Folder>
+</Solution>
