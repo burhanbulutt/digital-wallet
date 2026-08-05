@@ -21,8 +21,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\VirtualCard.Application\VirtualCard.Application.csproj" />
-    <ProjectReference Include="..\..\src\VirtualCard.Domain\VirtualCard.Domain.csproj" />
+    <ProjectReference Include="..\..\src\DigitalWallet.Domain\DigitalWallet.Domain.csproj" />
+    <ProjectReference Include="..\..\src\DigitalWallet.Application\DigitalWallet.Application.csproj" />
+    <ProjectReference Include="..\..\src\DigitalWallet.Infrastructure\DigitalWallet.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\DigitalWallet.Api\DigitalWallet.Api.csproj" />
   </ItemGroup>
 
 </Project>

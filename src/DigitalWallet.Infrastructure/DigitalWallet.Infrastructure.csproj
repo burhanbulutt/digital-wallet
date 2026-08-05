@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\VirtualCard.Domain\VirtualCard.Domain.csproj" />
+    <ProjectReference Include="..\DigitalWallet.Application\DigitalWallet.Application.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

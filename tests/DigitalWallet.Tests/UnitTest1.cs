@@ -1,4 +1,4 @@
-﻿namespace VirtualCard.Tests;
+﻿namespace DigitalWallet.Tests;
 
 public class Tests
 {

@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\VirtualCard.Application\VirtualCard.Application.csproj" />
+    <ProjectReference Include="..\DigitalWallet.Application\DigitalWallet.Application.csproj" />
   </ItemGroup>
 
 </Project>
