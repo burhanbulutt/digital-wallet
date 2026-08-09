@@ -34,7 +34,7 @@ public class AppDbContext : DbContext
             entity.HasAlternateKey(e => e.CustomerNo); 
 
             entity.Property(e => e.Username).HasMaxLength(50).IsRequired();
-            entity.HasIndex(e => e.Username).IsUnique();
+            entity.HasIndex(e => e.Username).IsUnique().HasFilter("[IsDeleted] = 0");
 
             entity.Property(e => e.PasswordHash).HasMaxLength(256).IsRequired();
             entity.Property(e => e.Email).HasMaxLength(100);
@@ -47,7 +47,7 @@ public class AppDbContext : DbContext
             // Filtered unique index on Email (ignores NULLs)
             entity.HasIndex(e => e.Email)
                   .IsUnique()
-                  .HasFilter("[Email] IS NOT NULL");
+                  .HasFilter("[IsDeleted] = 0 AND [Email] IS NOT NULL");
 
             // Soft delete global filter
             entity.HasQueryFilter(e => !e.IsDeleted);
@@ -59,9 +59,12 @@ public class AppDbContext : DbContext
             entity.ToTable("Card");
             entity.HasKey(e => e.Id);
 
-            entity.Property(e => e.CardHolderCusNo).HasMaxLength(50).IsRequired();
-            entity.Property(e => e.CardNumber).HasMaxLength(16).IsRequired();
-            entity.HasIndex(e => e.CardNumber).IsUnique();
+            entity.Property(e => e.CardHolderId).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.CardNumberHash).HasMaxLength(64).IsRequired();
+            entity.Property(e => e.Last4).HasMaxLength(4).IsRequired();
+            entity.Property(e => e.ExpiryYear).IsRequired();
+            entity.Property(e => e.ExpiryMonth).IsRequired();
+            entity.HasIndex(e => e.CardNumberHash).IsUnique();
 
             entity.Property(e => e.Balance).HasColumnType("decimal(18,2)").IsRequired();
 
@@ -70,7 +73,7 @@ public class AppDbContext : DbContext
                   .HasConversion<string>()
                   .HasMaxLength(50)
                   .IsRequired()
-                  .HasDefaultValueSql("'Pending'"); // Ensures default is 'Pending' in SQL
+                  .HasDefaultValueSql("'Active'");
 
             entity.Property(e => e.CardType)
                   .HasConversion(
@@ -94,9 +97,9 @@ public class AppDbContext : DbContext
 
             entity.HasOne(c => c.CardHolder)
                   .WithMany(ch => ch.Cards)
-                  .HasForeignKey(c => c.CardHolderCusNo)
-                  .HasPrincipalKey(ch => ch.CustomerNo)
-                  .OnDelete(DeleteBehavior.Restrict);
+                  .HasForeignKey(c => c.CardHolderId)
+                  .HasPrincipalKey(ch => ch.Id);// no need for this since CardHolder.Id is the primary key
+
 
             // Soft delete global filter
             entity.HasQueryFilter(e => !e.IsDeleted);
@@ -124,8 +127,7 @@ public class AppDbContext : DbContext
             // Foreign Key: CardTransaction -> Card
             entity.HasOne(t => t.Card)
                   .WithMany(c => c.Transactions)
-                  .HasForeignKey(t => t.CardId)
-                  .OnDelete(DeleteBehavior.Restrict);
+                  .HasForeignKey(t => t.CardId);
 
             entity.HasQueryFilter(e => !e.IsDeleted);
         });
@@ -155,9 +157,8 @@ public class AppDbContext : DbContext
             entity.HasIndex(b => new { b.CardId, b.Year, b.Month }).IsUnique();
 
             entity.HasOne(b => b.Card)
-                  .WithMany() // Left empty so you don't need a list in your Card class
-                  .HasForeignKey(b => b.CardId)
-                  .OnDelete(DeleteBehavior.Restrict); 
+                  .WithMany(c => c.Budgets)
+                  .HasForeignKey(b => b.CardId);
 
             entity.HasQueryFilter(e => !e.IsDeleted);
         });
@@ -183,13 +184,11 @@ public class AppDbContext : DbContext
 
             entity.HasOne(t => t.FromCard)
                   .WithMany()
-                  .HasForeignKey(t => t.FromCardId)
-                  .OnDelete(DeleteBehavior.Restrict);
+                  .HasForeignKey(t => t.FromCardId);
 
             entity.HasOne(t => t.ToCard)
                   .WithMany()
-                  .HasForeignKey(t => t.ToCardId)
-                  .OnDelete(DeleteBehavior.Restrict);
+                  .HasForeignKey(t => t.ToCardId);
 
             entity.HasQueryFilter(e => !e.IsDeleted);
         });

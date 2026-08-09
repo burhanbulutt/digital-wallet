@@ -5,8 +5,11 @@ namespace DigitalWallet.Domain.Entities;
 
 public class Card : BaseEntity
 {
-    public string CardHolderCusNo { get; set; } = null!;
-    public string CardNumber { get; set; } = null!;
+    public string CardHolderId { get; set; } = null!;
+    public string CardNumberHash { get; set; } = null!;
+    public string Last4{get; set; } = null!;
+    public int ExpiryYear { get; set; }
+    public int ExpiryMonth { get; set; }
     public decimal Balance { get; set; }
     public CardStatus Status { get; set; }
     public CardType CardType { get; set; }
@@ -15,5 +18,5 @@ public class Card : BaseEntity
 
     public CardHolder CardHolder { get; set; } = null!;
     public ICollection<CardTransaction> Transactions { get; set; } = new List<CardTransaction>();
-    public Budget? Budget { get; set; }
+    public ICollection<Budget>? Budgets { get; set; }
 }
