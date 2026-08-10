@@ -9,7 +9,7 @@ public class Transfer : BaseEntity
     public Guid ToCardId { get; set; }
     public decimal Amount { get; set; }
     public TransferStatus Status { get; set; }
-    public DateTime TransferDate { get; set; }
+    public DateTimeOffset TransferDate { get; set; }
 
     public Card FromCard { get; set; } = null!;
     public Card ToCard { get; set; } = null!;

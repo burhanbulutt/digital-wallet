@@ -33,6 +33,8 @@ public static class DependencyInjection
 
         services.AddScoped<IProcessLogger, ProcessLogger>();
 
+        services.AddSingleton(TimeProvider.System);
+
         return services;
     }
 }

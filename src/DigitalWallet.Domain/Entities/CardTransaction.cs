@@ -9,7 +9,7 @@ public class CardTransaction : BaseEntity
     public decimal Amount { get; set; }
     public Category Category { get; set; }
     public string? Description { get; set; }
-    public DateTime TransactionDate { get; set; }
+    public DateTimeOffset TransactionDate { get; set; }
 
     public Card Card { get; set; } = null!;
 }

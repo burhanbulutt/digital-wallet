@@ -6,6 +6,11 @@ using Microsoft.EntityFrameworkCore;
 
 public class AuditableEntityInterceptor : SaveChangesInterceptor
 {
+    private readonly TimeProvider _timeProvider;
+
+    public AuditableEntityInterceptor(TimeProvider timeProvider)
+        => _timeProvider = timeProvider;
+        
     public override InterceptionResult<int> SavingChanges(
         DbContextEventData eventData, InterceptionResult<int> result)
     {
@@ -20,10 +25,10 @@ public class AuditableEntityInterceptor : SaveChangesInterceptor
         return base.SavingChangesAsync(eventData, result, cancellationToken);
     }
 
-    private static void Apply(DbContext? context)
+    private void Apply(DbContext? context)
     {
         if (context is null) return;
-        var now = DateTime.Now;
+        var now = _timeProvider.GetUtcNow();
 
         foreach (var entry in context.ChangeTracker.Entries<BaseEntity>())
         {
