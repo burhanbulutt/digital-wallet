@@ -17,6 +17,8 @@ public class AppDbContext : DbContext
     public DbSet<Transfer> Transfers => Set<Transfer>();
     public DbSet<ProcessLog> ProcessLogs => Set<ProcessLog>();
 
+    private const string UtcNowSql = "SYSUTCDATETIME() AT TIME ZONE 'UTC'";
+
     
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -41,7 +43,7 @@ public class AppDbContext : DbContext
             entity.Property(e => e.FullName).HasMaxLength(150).IsRequired();
             entity.Property(e => e.Salary).HasColumnType("decimal(18,2)").IsRequired();
 
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("SYSDATETIME()");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql(UtcNowSql);
             entity.Property(e => e.IsDeleted).HasDefaultValue(false);
 
             // Filtered unique index on Email (ignores NULLs)
@@ -60,7 +62,7 @@ public class AppDbContext : DbContext
             entity.HasKey(e => e.Id);
 
             entity.Property(e => e.CardHolderId).HasMaxLength(50).IsRequired();
-            entity.Property(e => e.CardNumberHash).HasMaxLength(64).IsRequired();
+            entity.Property(e => e.CardNumberHash).HasMaxLength(64).IsUnicode(false).IsFixedLength().IsRequired();
             entity.Property(e => e.Last4).HasMaxLength(4).IsRequired();
             entity.Property(e => e.ExpiryYear).IsRequired();
             entity.Property(e => e.ExpiryMonth).IsRequired();
@@ -89,7 +91,7 @@ public class AppDbContext : DbContext
                   .IsRequired();
 
             // SQL Defaults for Base Entity properties
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("SYSDATETIME()");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql(UtcNowSql);
             entity.Property(e => e.IsDeleted).HasDefaultValue(false);
 
             // Optimistic concurrency row version
@@ -121,7 +123,7 @@ public class AppDbContext : DbContext
                   .IsRequired();
 
             // SQL Defaults for Base Entity properties
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("SYSDATETIME()");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql(UtcNowSql);
             entity.Property(e => e.IsDeleted).HasDefaultValue(false);
 
             // Foreign Key: CardTransaction -> Card
@@ -147,7 +149,7 @@ public class AppDbContext : DbContext
                   .IsRequired()
                   .HasDefaultValue(0m); 
 
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("SYSDATETIME()");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql(UtcNowSql);
             entity.Property(e => e.IsDeleted).HasDefaultValue(false);
 
             entity.Property(e => e.WarningThreshold80).HasDefaultValue(false);
@@ -179,7 +181,7 @@ public class AppDbContext : DbContext
                   .HasDefaultValueSql("'Pending'");
 
             // SQL Defaults for Base Entity properties
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("SYSDATETIME()");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql(UtcNowSql);
             entity.Property(e => e.IsDeleted).HasDefaultValue(false);
 
             entity.HasOne(t => t.FromCard)
@@ -201,7 +203,7 @@ public class AppDbContext : DbContext
 
             entity.Property(e => e.Timestamp)
                   .IsRequired()
-                  .HasDefaultValueSql("SYSDATETIME()");
+                  .HasDefaultValueSql(UtcNowSql);
 
             entity.Property(e => e.Message).HasMaxLength(500).IsRequired();
 

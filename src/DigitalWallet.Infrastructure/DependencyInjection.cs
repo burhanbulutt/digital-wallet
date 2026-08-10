@@ -35,6 +35,12 @@ public static class DependencyInjection
 
         services.AddSingleton(TimeProvider.System);
 
+        var pepper = configuration["CardSettings:Pepper"]
+        ?? throw new InvalidOperationException("CardSettings:Pepper is not configured.");
+
+        services.AddSingleton<ICardGenerator>(sp =>
+            new CardGenerator(pepper, sp.GetRequiredService<TimeProvider>()));
+
         return services;
     }
 }

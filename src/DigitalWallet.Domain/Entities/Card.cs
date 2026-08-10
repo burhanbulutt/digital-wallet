@@ -5,7 +5,7 @@ namespace DigitalWallet.Domain.Entities;
 
 public class Card : BaseEntity
 {
-    public string CardHolderId { get; set; } = null!;
+    public Guid CardHolderId { get; set; }
     public string CardNumberHash { get; set; } = null!;
     public string Last4{get; set; } = null!;
     public int ExpiryYear { get; set; }
