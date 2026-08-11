@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using DigitalWallet.Infrastructure.Data;
 using DigitalWallet.Infrastructure.Data.Interceptors;
 using DigitalWallet.Infrastructure.Services;
-using DigitalWallet.Application.Interfaces;
+using DigitalWallet.Application.Interfaces.Infrastructure;
 
 
 namespace DigitalWallet.Infrastructure;

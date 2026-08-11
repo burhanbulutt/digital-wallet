@@ -1,4 +1,4 @@
-using DigitalWallet.Application.Interfaces;
+using DigitalWallet.Application.Interfaces.Infrastructure;
 using DigitalWallet.Domain.Entities;
 using DigitalWallet.Domain.Enums;
 using System.Security.Cryptography;

@@ -1,7 +1,7 @@
 using DigitalWallet.Domain.Entities;
 using DigitalWallet.Domain.Enums;
 
-namespace DigitalWallet.Application.Interfaces;
+namespace DigitalWallet.Application.Interfaces.Infrastructure;
 
 public interface ICardGenerator
 {
