@@ -5,6 +5,7 @@ using DigitalWallet.Infrastructure.Data;
 using DigitalWallet.Infrastructure.Data.Interceptors;
 using DigitalWallet.Infrastructure.Services;
 using DigitalWallet.Application.Interfaces.Infrastructure;
+using DigitalWallet.Infrastructure.Data.Repositories;  
 
 
 namespace DigitalWallet.Infrastructure;
@@ -40,6 +41,11 @@ public static class DependencyInjection
 
         services.AddSingleton<ICardGenerator>(sp =>
             new CardGenerator(pepper, sp.GetRequiredService<TimeProvider>()));
+
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<ICardRepository, CardRepository>();
+        services.AddScoped<ICardHolderRepository, CardHolderRepository>();
+        services.AddScoped<IProcessLogger, ProcessLogger>();
 
         return services;
     }
