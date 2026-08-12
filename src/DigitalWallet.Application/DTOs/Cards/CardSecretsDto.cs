@@ -10,4 +10,11 @@ public record CardSecretsDto(
     int ExpiryYear,
     CardBrand Brand,
     CardType CardType,
-    CardStatus Status);
+    CardStatus Status,
+
+    // Null for debit cards. For credit and virtual cards this is the limit that
+    // was actually assigned, which may be lower than what was requested.
+    decimal? LimitAmount,
+
+    // Set only for virtual cards.
+    Guid? MainCardId);

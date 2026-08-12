@@ -33,10 +33,9 @@ public class AppDbContext : DbContext
             entity.HasKey(e => e.Id);
 
             entity.Property(e => e.CustomerNo).HasMaxLength(50).IsRequired();
-            entity.HasAlternateKey(e => e.CustomerNo); 
 
             entity.Property(e => e.Username).HasMaxLength(50).IsRequired();
-            entity.HasIndex(e => e.Username).IsUnique().HasFilter("[IsDeleted] = 0");
+            entity.HasIndex(e => e.Username).IsUnique();
 
             entity.Property(e => e.PasswordHash).HasMaxLength(256).IsRequired();
             entity.Property(e => e.Email).HasMaxLength(100);
@@ -61,12 +60,15 @@ public class AppDbContext : DbContext
             entity.ToTable("Card");
             entity.HasKey(e => e.Id);
 
-            entity.Property(e => e.CardHolderId).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.CardHolderId).IsRequired();
             entity.Property(e => e.CardNumberHash).HasMaxLength(64).IsUnicode(false).IsFixedLength().IsRequired();
-            entity.Property(e => e.Last4).HasMaxLength(4).IsRequired();
+            entity.Property(e => e.Last4).HasMaxLength(4).IsUnicode(false).IsFixedLength().IsRequired();
             entity.Property(e => e.ExpiryYear).IsRequired();
             entity.Property(e => e.ExpiryMonth).IsRequired();
-            entity.HasIndex(e => e.CardNumberHash).IsUnique();
+
+            entity.HasIndex(e => e.CardNumberHash)
+                  .IsUnique()
+                  .HasFilter("[IsDeleted] = 0");
 
             entity.Property(e => e.Balance).HasColumnType("decimal(18,2)").IsRequired();
 
@@ -77,12 +79,16 @@ public class AppDbContext : DbContext
                   .IsRequired()
                   .HasDefaultValueSql("'Active'");
 
+            // C = Credit, D = Debit, V = Virtual. CHK_Card_CardType in the database
+            // is what guards against a value outside this set.
             entity.Property(e => e.CardType)
                   .HasConversion(
-                      v => v == CardType.Virtual ? "V" : "P",
-                      v => v == "V" ? CardType.Virtual : CardType.Physical
+                      v => v == CardType.Credit ? "C" : v == CardType.Debit ? "D" : "V",
+                      v => v == "C" ? CardType.Credit : v == "D" ? CardType.Debit : CardType.Virtual
                   )
                   .HasMaxLength(1)
+                  .IsFixedLength()
+                  .IsUnicode(false)
                   .IsRequired();
 
             entity.Property(e => e.Brand)
@@ -99,9 +105,17 @@ public class AppDbContext : DbContext
 
             entity.HasOne(c => c.CardHolder)
                   .WithMany(ch => ch.Cards)
-                  .HasForeignKey(c => c.CardHolderId)
-                  .HasPrincipalKey(ch => ch.Id);// no need for this since CardHolder.Id is the primary key
+                  .HasForeignKey(c => c.CardHolderId);
+                  //.HasPrincipalKey(ch => ch.Id);// no need for this since CardHolder.Id is the primary key
+                  // if you are gonna use this, you should add hasAlternateKey to targeted column.
 
+            // Self-reference: a virtual card points at the credit card it draws from.
+            entity.HasOne(c => c.MainCard)
+                  .WithMany(c => c.VirtualCards)
+                  .HasForeignKey(c => c.MainCardId);
+
+            entity.HasIndex(e => e.CardHolderId).HasFilter("[IsDeleted] = 0");
+            entity.HasIndex(e => e.MainCardId);
 
             // Soft delete global filter
             entity.HasQueryFilter(e => !e.IsDeleted);
@@ -140,14 +154,18 @@ public class AppDbContext : DbContext
             entity.ToTable("Budget");
             entity.HasKey(e => e.Id);
 
-            entity.Property(e => e.Year).IsRequired();
-            entity.Property(e => e.Month).IsRequired();
             entity.Property(e => e.LimitAmount).HasColumnType("decimal(18,2)").IsRequired();
-            
+
             entity.Property(e => e.SpentAmount)
                   .HasColumnType("decimal(18,2)")
                   .IsRequired()
-                  .HasDefaultValue(0m); 
+                  .HasDefaultValue(0m);
+
+            // Credit cards only: the sum of child virtual card limits.
+            entity.Property(e => e.ReservedAmount)
+                  .HasColumnType("decimal(18,2)")
+                  .IsRequired()
+                  .HasDefaultValue(0m);
 
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(UtcNowSql);
             entity.Property(e => e.IsDeleted).HasDefaultValue(false);
@@ -155,12 +173,19 @@ public class AppDbContext : DbContext
             entity.Property(e => e.WarningThreshold80).HasDefaultValue(false);
             entity.Property(e => e.WarningThreshold100).HasDefaultValue(false);
 
-            // Unique constraint: one budget per card per month/year
-            entity.HasIndex(b => new { b.CardId, b.Year, b.Month }).IsUnique();
+            // Budget is the contended row for every spend and every virtual card
+            // allocation, so the concurrency guard belongs here.
+            entity.Property(e => e.RowVersion).IsRowVersion();
+
+            // One budget per card. Filtered so a soft-deleted budget does not
+            // block creating a replacement for the same card.
+            entity.HasIndex(b => b.CardId)
+                  .IsUnique()
+                  .HasFilter("[IsDeleted] = 0");
 
             entity.HasOne(b => b.Card)
-                  .WithMany(c => c.Budgets)
-                  .HasForeignKey(b => b.CardId);
+                  .WithOne(c => c.Budget)
+                  .HasForeignKey<Budget>(b => b.CardId);
 
             entity.HasQueryFilter(e => !e.IsDeleted);
         });

@@ -32,8 +32,6 @@ public static class DependencyInjection
 
         services.AddDbContextFactory<AppDbContext>(options => options.UseSqlServer(connectionString));
 
-        services.AddScoped<IProcessLogger, ProcessLogger>();
-
         services.AddSingleton(TimeProvider.System);
 
         var pepper = configuration["CardSettings:Pepper"]
@@ -45,6 +43,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<ICardRepository, CardRepository>();
         services.AddScoped<ICardHolderRepository, CardHolderRepository>();
+        services.AddScoped<IBudgetRepository, BudgetRepository>();
         services.AddScoped<IProcessLogger, ProcessLogger>();
 
         return services;

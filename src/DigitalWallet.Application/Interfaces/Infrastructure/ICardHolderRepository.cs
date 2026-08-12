@@ -2,5 +2,7 @@ namespace DigitalWallet.Application.Interfaces.Infrastructure;
 
 public interface ICardHolderRepository
 {
-    Task<bool> ExistsAsync(Guid cardHolderId, CancellationToken ct = default);
+    // not used anymore, GetSalaryAsync also checks for existence. Maybe should be used for clarity of task.
+    Task<bool> ExistsAsync(Guid cardHolderId, CancellationToken ct = default); 
+    Task<decimal?> GetSalaryAsync(Guid cardHolderId, CancellationToken ct = default);
 }

@@ -18,6 +18,23 @@ public class CardRepository : ICardRepository
     public async Task<Card?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => await _context.Cards.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct);
 
+    // Ownership is a WHERE clause, not a post-load if. A card belonging to
+    // someone else simply is not returned, so the not-found path produces the
+    // 404 we want and there is no separate check to forget.
+    public async Task<Card?> GetByIdForHolderAsync(
+        Guid id, Guid cardHolderId, CancellationToken ct = default)
+        => await _context.Cards
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == id && c.CardHolderId == cardHolderId, ct);
+
+    // Tracked, with the Budget included, because the caller is about to mutate
+    // it and needs the RowVersion for the concurrency check.
+    public async Task<Card?> GetTrackedByIdForHolderAsync(
+        Guid id, Guid cardHolderId, CancellationToken ct = default)
+        => await _context.Cards
+            .Include(c => c.Budget)
+            .FirstOrDefaultAsync(c => c.Id == id && c.CardHolderId == cardHolderId, ct);
+
     public async Task<int> CountActiveByHolderAsync(
         Guid cardHolderId, CancellationToken ct = default)
         => await _context.Cards

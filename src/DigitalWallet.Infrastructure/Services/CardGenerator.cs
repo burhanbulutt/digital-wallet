@@ -16,6 +16,9 @@ public class CardGenerator : ICardGenerator
         _pepper = Convert.FromBase64String(pepper);
         _timeProvider = timeProvider;
     }
+
+    // CardHolderId, MainCardId and the Budget allocation are all the service's
+    // job. This only produces the artifact.
     public (Card Card, string CardNumber) Generate(CardType cardType, CardBrand brand)
     {
         var cardNumber = GenerateCardNumber(brand);
@@ -56,7 +59,7 @@ public class CardGenerator : ICardGenerator
 
         int sum = 0;
         bool isSecond = true;
-        for (int i = nDigits - 1; i >= 0; i--) 
+        for (int i = nDigits - 1; i >= 0; i--)
         {
              int d = number[i] - '0';
 

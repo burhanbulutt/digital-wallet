@@ -9,10 +9,12 @@ namespace DigitalWallet.Infrastructure.Services;
 public class ProcessLogger : IProcessLogger
 {
     private readonly IDbContextFactory<AppDbContext> _factory;
+    private readonly TimeProvider _timeProvider;
 
-    public ProcessLogger(IDbContextFactory<AppDbContext> factory)
+    public ProcessLogger(IDbContextFactory<AppDbContext> factory, TimeProvider timeProvider)
     {
         _factory = factory;
+        _timeProvider = timeProvider;
     }
 
     public async Task LogAsync(
@@ -30,7 +32,7 @@ public class ProcessLogger : IProcessLogger
             Level = level,
             Message = message,
             EntityId = entityId,
-            Timestamp = DateTime.UtcNow
+            Timestamp = _timeProvider.GetUtcNow()
         });
 
         await context.SaveChangesAsync(ct);
