@@ -33,10 +33,7 @@ public class AppDbContext : DbContext
             entity.HasKey(e => e.Id);
 
             entity.Property(e => e.CustomerNo).HasMaxLength(50).IsRequired();
-
             entity.Property(e => e.Username).HasMaxLength(50).IsRequired();
-            entity.HasIndex(e => e.Username).IsUnique();
-
             entity.Property(e => e.PasswordHash).HasMaxLength(256).IsRequired();
             entity.Property(e => e.Email).HasMaxLength(100);
             entity.Property(e => e.FullName).HasMaxLength(150).IsRequired();
@@ -45,9 +42,12 @@ public class AppDbContext : DbContext
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(UtcNowSql);
             entity.Property(e => e.IsDeleted).HasDefaultValue(false);
 
+            entity.HasIndex(e => e.CustomerNo).IsUnique().HasDatabaseName("IX_CardHolder_CustomerNo");
+            entity.HasIndex(e => e.Username).IsUnique().HasDatabaseName("IX_CardHolder_Username");
+
             // Filtered unique index on Email (ignores NULLs)
             entity.HasIndex(e => e.Email)
-                  .IsUnique()
+                  .IsUnique().HasDatabaseName("IX_CardHolder_Email")
                   .HasFilter("[IsDeleted] = 0 AND [Email] IS NOT NULL");
 
             // Soft delete global filter
@@ -65,12 +65,14 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Last4).HasMaxLength(4).IsUnicode(false).IsFixedLength().IsRequired();
             entity.Property(e => e.ExpiryYear).IsRequired();
             entity.Property(e => e.ExpiryMonth).IsRequired();
-
-            entity.HasIndex(e => e.CardNumberHash)
-                  .IsUnique()
-                  .HasFilter("[IsDeleted] = 0");
-
+            // Optimistic concurrency row version
+            entity.Property(e => e.RowVersion).IsRowVersion();
             entity.Property(e => e.Balance).HasColumnType("decimal(18,2)").IsRequired();
+            entity.Property(e=> e.MainCardId).IsRequired(false);
+
+            // SQL Defaults for Base Entity properties
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql(UtcNowSql);
+            entity.Property(e => e.IsDeleted).HasDefaultValue(false);
 
             // Enum Converters & Defaults
             entity.Property(e => e.Status)
@@ -96,13 +98,6 @@ public class AppDbContext : DbContext
                   .HasMaxLength(50)
                   .IsRequired();
 
-            // SQL Defaults for Base Entity properties
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql(UtcNowSql);
-            entity.Property(e => e.IsDeleted).HasDefaultValue(false);
-
-            // Optimistic concurrency row version
-            entity.Property(e => e.RowVersion).IsRowVersion();
-
             entity.HasOne(c => c.CardHolder)
                   .WithMany(ch => ch.Cards)
                   .HasForeignKey(c => c.CardHolderId);
@@ -114,8 +109,15 @@ public class AppDbContext : DbContext
                   .WithMany(c => c.VirtualCards)
                   .HasForeignKey(c => c.MainCardId);
 
-            entity.HasIndex(e => e.CardHolderId).HasFilter("[IsDeleted] = 0");
-            entity.HasIndex(e => e.MainCardId);
+            entity.HasIndex(e => e.CardHolderId)
+                  .HasDatabaseName("IX_Card_CardHolderId")
+                  .HasFilter("[IsDeleted] = 0");
+
+            entity.HasIndex(e => e.MainCardId).HasDatabaseName("IX_Card_MainCardId")
+                  .HasFilter("[IsDeleted] = 0");
+
+            entity.HasIndex(e => e.CardNumberHash)
+                  .IsUnique().HasDatabaseName("IX_Card_CardNumberHash");
 
             // Soft delete global filter
             entity.HasQueryFilter(e => !e.IsDeleted);
@@ -130,20 +132,26 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Amount).HasColumnType("decimal(18,2)").IsRequired();
             entity.Property(e => e.Description).HasMaxLength(200);
             entity.Property(e => e.TransactionDate).IsRequired();
+            entity.Property(e => e.CardId).IsRequired();
+
+            // SQL Defaults for Base Entity properties
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql(UtcNowSql);
+            entity.Property(e => e.IsDeleted).HasDefaultValue(false);
 
             entity.Property(e => e.Category)
                   .HasConversion<string>()
                   .HasMaxLength(50)
                   .IsRequired();
 
-            // SQL Defaults for Base Entity properties
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql(UtcNowSql);
-            entity.Property(e => e.IsDeleted).HasDefaultValue(false);
-
             // Foreign Key: CardTransaction -> Card
             entity.HasOne(t => t.Card)
                   .WithMany(c => c.Transactions)
                   .HasForeignKey(t => t.CardId);
+
+            entity.HasIndex(e => new { e.CardId, e.TransactionDate })
+                  .HasDatabaseName("IX_CardTransaction_CardId_TransactionDate")
+                  .IsDescending(false, true)
+                  .HasFilter("[IsDeleted] = 0");
 
             entity.HasQueryFilter(e => !e.IsDeleted);
         });
@@ -155,6 +163,15 @@ public class AppDbContext : DbContext
             entity.HasKey(e => e.Id);
 
             entity.Property(e => e.LimitAmount).HasColumnType("decimal(18,2)").IsRequired();
+            // Budget is the contended row for every spend and every virtual card
+            // allocation, so the concurrency guard belongs here.
+            entity.Property(e => e.RowVersion).IsRowVersion();
+            entity.Property(e => e.WarningThreshold80).HasDefaultValue(false);
+            entity.Property(e => e.WarningThreshold100).HasDefaultValue(false);
+            entity.Property(e => e.CardId).IsRequired();
+
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql(UtcNowSql);
+            entity.Property(e => e.IsDeleted).HasDefaultValue(false);
 
             entity.Property(e => e.SpentAmount)
                   .HasColumnType("decimal(18,2)")
@@ -167,25 +184,15 @@ public class AppDbContext : DbContext
                   .IsRequired()
                   .HasDefaultValue(0m);
 
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql(UtcNowSql);
-            entity.Property(e => e.IsDeleted).HasDefaultValue(false);
-
-            entity.Property(e => e.WarningThreshold80).HasDefaultValue(false);
-            entity.Property(e => e.WarningThreshold100).HasDefaultValue(false);
-
-            // Budget is the contended row for every spend and every virtual card
-            // allocation, so the concurrency guard belongs here.
-            entity.Property(e => e.RowVersion).IsRowVersion();
+            entity.HasOne(b => b.Card)
+                  .WithOne(c => c.Budget)
+                  .HasForeignKey<Budget>(b => b.CardId);
 
             // One budget per card. Filtered so a soft-deleted budget does not
             // block creating a replacement for the same card.
             entity.HasIndex(b => b.CardId)
-                  .IsUnique()
+                  .IsUnique().HasDatabaseName("IX_Budget_CardId")
                   .HasFilter("[IsDeleted] = 0");
-
-            entity.HasOne(b => b.Card)
-                  .WithOne(c => c.Budget)
-                  .HasForeignKey<Budget>(b => b.CardId);
 
             entity.HasQueryFilter(e => !e.IsDeleted);
         });
@@ -196,6 +203,8 @@ public class AppDbContext : DbContext
             entity.ToTable("Transfer");
             entity.HasKey(e => e.Id);
 
+            entity.Property(e => e.FromCardId).IsRequired();
+            entity.Property(e => e.ToCardId).IsRequired();
             entity.Property(e => e.Amount).HasColumnType("decimal(18,2)").IsRequired();
             entity.Property(e => e.TransferDate).IsRequired();
 
@@ -211,11 +220,23 @@ public class AppDbContext : DbContext
 
             entity.HasOne(t => t.FromCard)
                   .WithMany()
+                  .OnDelete(DeleteBehavior.Restrict) // cascade would delete one leg of transfer.
                   .HasForeignKey(t => t.FromCardId);
 
             entity.HasOne(t => t.ToCard)
                   .WithMany()
+                  .OnDelete(DeleteBehavior.Restrict)
                   .HasForeignKey(t => t.ToCardId);
+
+            entity.HasIndex(e => new { e.FromCardId, e.TransferDate })
+                  .HasDatabaseName("IX_Transfer_FromCardId_TransferDate")
+                  .IsDescending(false, true)
+                  .HasFilter("[IsDeleted] = 0");
+
+            entity.HasIndex(e => new { e.ToCardId, e.TransferDate })
+                  .HasDatabaseName("IX_Transfer_ToCardId_TransferDate")
+                  .IsDescending(false, true)
+                  .HasFilter("[IsDeleted] = 0");
 
             entity.HasQueryFilter(e => !e.IsDeleted);
         });
@@ -225,6 +246,8 @@ public class AppDbContext : DbContext
         {
             entity.ToTable("ProcessLog");
             entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.EntityId).IsRequired(false);
 
             entity.Property(e => e.Timestamp)
                   .IsRequired()

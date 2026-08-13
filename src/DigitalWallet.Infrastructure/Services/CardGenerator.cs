@@ -53,7 +53,7 @@ public class CardGenerator : ICardGenerator
     }
 
     // Luhn algorithm to calculate the rightmost digit
-    private static string CreateRightMostDigit(String number)
+    private static string CreateRightMostDigit(string number)
     {
         int nDigits = number.Length;
 
