@@ -6,6 +6,7 @@ using DigitalWallet.Domain.Exceptions;
 using DigitalWallet.Domain.Services;
 using DigitalWallet.Application.Interfaces.Infrastructure;
 using System.Diagnostics;
+using DigitalWallet.Application.DTOs.Common;
 
 namespace DigitalWallet.Application.Services;
 
@@ -165,4 +166,45 @@ public class CardService : ICardService
         return parent.Budget
                ?? throw new InvalidMainCardException(parent.Id, "Main card has no budget.");
     }
+
+    public Task<PagedResult<CardDto>> GetPagedAsync(
+        Guid cardHolderId, CardListFilter filter, PaginationQuery pagination,
+        CancellationToken ct = default)
+        // ownership check is done with WHERE clause
+        => _cardRepository.GetPagedForHolderAsync(cardHolderId, filter, pagination, ct);
+    
+    public async Task<CardDto> GetByIdAsync(Guid id, Guid cardHolderId, CancellationToken ct = default)
+    {
+        var (Dto, OwnerId) = await _cardRepository.GetDtoWithOwnerAsync(id, ct)
+                 ?? throw new CardNotFoundException(id);
+
+        if (OwnerId != cardHolderId)
+            throw new UnauthorizedCardAccessException(id);
+
+        return Dto;
+    }
+    
+    public async Task<CardDto> UpdateStatusAsync(
+        Guid id, Guid cardHolderId, CardStatus newStatus, CancellationToken ct = default)
+    {
+        var card = await _cardRepository.GetTrackedByIdAsync(id, ct)
+                   ?? throw new CardNotFoundException(id);
+    
+        if (card.CardHolderId != cardHolderId)
+            throw new UnauthorizedCardAccessException(id);
+    
+        var previous = card.Status;
+
+        // TODO: I didnt handle the case where card is closed yet.
+    
+        CardPolicy.TransitionTo(card, newStatus);
+        await _unitOfWork.SaveChangesAsync(ct);
+    
+        await _processLogger.LogAsync(
+            ProcessName.CardStatusUpdate, LogLevel.Success,
+            $"Card status changed from {previous} to {newStatus}.", card.Id, ct);
+    
+        return CardDto.From(card);
+    }
+    
 }

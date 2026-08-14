@@ -20,7 +20,7 @@ public static class DependencyInjection
         services.AddSingleton<AuditableEntityInterceptor>();// registering the interceptor into the DI container
 
         services.AddDbContext<AppDbContext>((sp, options) =>
-        options.UseSqlServer(connectionString)
+        options.UseSqlServer(connectionString, sql => sql.CommandTimeout(30))
            .AddInterceptors(sp.GetRequiredService<AuditableEntityInterceptor>()),// attaches the interceptor to EF
            optionsLifetime: ServiceLifetime.Singleton);
            // both addDbContext and addDbContextFactory registers DbContextOptions<AppDbContext>.
@@ -30,7 +30,7 @@ public static class DependencyInjection
            // otherwise it will throw an exception about scoped service in singleton.
            
 
-        services.AddDbContextFactory<AppDbContext>(options => options.UseSqlServer(connectionString));
+        services.AddDbContextFactory<AppDbContext>(options => options.UseSqlServer(connectionString, sql => sql.CommandTimeout(30)));
 
         services.AddSingleton(TimeProvider.System);
 

@@ -1,3 +1,5 @@
+using DigitalWallet.Application.DTOs.Cards;
+using DigitalWallet.Application.DTOs.Common;
 using DigitalWallet.Application.Interfaces.Infrastructure;
 using DigitalWallet.Domain.Entities;
 using DigitalWallet.Domain.Enums;
@@ -41,4 +43,56 @@ public class CardRepository : ICardRepository
             .AsNoTracking() // read only, no need to track for changes. memory save and faster execution.
             .CountAsync(c => c.CardHolderId == cardHolderId
                           && c.Status == CardStatus.Active, ct);
+
+
+    public async Task<PagedResult<CardDto>> GetPagedForHolderAsync(
+    Guid cardHolderId, CardListFilter filter, PaginationQuery pagination,
+    CancellationToken ct = default)
+    {
+        var query = _context.Cards
+            .AsNoTracking()
+            .Where(c => c.CardHolderId == cardHolderId);
+
+        if (filter.Status is not null)   query = query.Where(c => c.Status == filter.Status);
+        if (filter.CardType is not null) query = query.Where(c => c.CardType == filter.CardType);
+        if (filter.Brand is not null)    query = query.Where(c => c.Brand == filter.Brand);
+
+        var totalCount = await query.CountAsync(ct);
+
+        var items = await query
+            .OrderByDescending(c => c.CreatedAt)
+            .ThenBy(c => c.Id)          // without this, rows sharing a
+                                        // CreatedAt can repeat or vanish across pages
+            .Skip(pagination.Skip)
+            .Take(pagination.PageSize)
+            .Select(CardDto.Projection)
+            .ToListAsync(ct);
+
+        return new PagedResult<CardDto>(items, pagination.Page, pagination.PageSize, totalCount);
+    }
+
+    public async Task<CardDto?> GetDtoByIdAsync(Guid id, CancellationToken ct = default)
+        => await _context.Cards
+            .AsNoTracking()
+            .Where(c => c.Id == id)
+            .Select(CardDto.Projection)
+            .FirstOrDefaultAsync(ct);
+
+
+    public async Task<Card?> GetTrackedByIdAsync(Guid id, CancellationToken ct = default)
+        => await _context.Cards
+            .Include(c => c.Budget)
+            .FirstOrDefaultAsync(c => c.Id == id, ct);
+
+    // CardRepository
+    public async Task<(CardDto Dto, Guid OwnerId)?> GetDtoWithOwnerAsync(
+        Guid id, CancellationToken ct = default)
+    {
+        var card = await _context.Cards
+            .AsNoTracking()
+            .Include(c => c.Budget)
+            .FirstOrDefaultAsync(c => c.Id == id, ct);
+    
+        return card is null ? null : (CardDto.From(card), card.CardHolderId);
+    }
 }

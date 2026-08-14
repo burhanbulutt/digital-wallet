@@ -1,3 +1,5 @@
+using DigitalWallet.Application.DTOs.Cards;
+using DigitalWallet.Application.DTOs.Common;
 using DigitalWallet.Domain.Entities;
 
 namespace DigitalWallet.Application.Interfaces.Infrastructure;
@@ -13,4 +15,15 @@ public interface ICardRepository
     Task<Card?> GetTrackedByIdForHolderAsync(Guid id, Guid cardHolderId, CancellationToken ct = default);
 
     Task<int> CountActiveByHolderAsync(Guid cardHolderId, CancellationToken ct = default);
+
+    Task<PagedResult<CardDto>> GetPagedForHolderAsync(
+        Guid cardHolderId, CardListFilter filter, PaginationQuery pagination,
+        CancellationToken ct = default);
+    
+    Task<CardDto?> GetDtoByIdAsync(Guid id, CancellationToken ct = default);
+    
+    //  for the status update. using card id.
+    Task<Card?> GetTrackedByIdAsync(Guid id, CancellationToken ct = default);
+
+    Task<(CardDto Dto, Guid OwnerId)?> GetDtoWithOwnerAsync(Guid id, CancellationToken ct = default);
 }
