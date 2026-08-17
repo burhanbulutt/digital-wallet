@@ -22,8 +22,11 @@ public interface ICardRepository
     
     Task<CardDto?> GetDtoByIdAsync(Guid id, CancellationToken ct = default);
     
-    //  for the status update. using card id.
-    Task<Card?> GetTrackedByIdAsync(Guid id, CancellationToken ct = default);
+    Task<Card?> GetTrackedForStatusChangeAsync(Guid id, CancellationToken ct = default);
+
+    // Tracked, with the Budget, because credit and virtual cards spend from it.
+    Task<Card?> GetTrackedForSpendAsync(Guid id, CancellationToken ct = default);
 
     Task<(CardDto Dto, Guid OwnerId)?> GetDtoWithOwnerAsync(Guid id, CancellationToken ct = default);
+
 }

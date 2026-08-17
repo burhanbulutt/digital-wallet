@@ -1,11 +1,10 @@
 using DigitalWallet.Domain.Exceptions;
 using DigitalWallet.Domain.Entities;
 using  DigitalWallet.Domain.Enums;
+using DigitalWallet.Domain.Services;
 
 namespace DigitalWallet.Domain.Services;
 
-// Debit cards spend from Balance and implemented here. Credit and virtual cards
-// spend from their allocation which implemented in BudgetPolicy.
 public static class CardPolicy
 {
     public const int MaxActiveCardsPerHolder = 5;
@@ -28,7 +27,7 @@ public static class CardPolicy
     }
 
     // Every money movement starts with this. TransactionService and
-    // TransferService both need it, which is why it is not written inline.
+    // TransferService both need it.
     public static void EnsureSpendable(Card card)
     {
         if (card.Status != CardStatus.Active)
@@ -36,33 +35,60 @@ public static class CardPolicy
                 card.Id, $"card is {card.Status}; only an Active card can be used.");
     }
 
-    private static void EnsureDebitCard(Card card)
+    public static void Close(Card card)
     {
-        if (card.CardType != CardType.Debit)
-            throw new InvalidCardException(
-                card.Id,
-                $"balance operations apply to debit cards only; this is a {card.CardType} card.");
+        if (card.CardType == CardType.Credit)
+        {
+            EnsureCreditCardSettled(card);
+
+            foreach (var child in card.VirtualCards.Where(v => v.Status != CardStatus.Closed))
+            {
+                TransitionTo(child, CardStatus.Closed);
+                BudgetPolicy.MoveDebtOnClose(child.Budget!, card.Budget!);
+            }
+        }
+
+        // No condition for debit card. It is closed regardlessly
+        TransitionTo(card, CardStatus.Closed);
+
+        if (card.CardType == CardType.Virtual)
+        {
+            var parentBudget = card.MainCard?.Budget
+                ?? throw new InvalidMainCardException(card.Id, "main card budget was not loaded.");
+
+            var childBudget = card.GetRequiredBudget();
+
+            BudgetPolicy.MoveDebtOnClose(childBudget, parentBudget);
+        }
     }
 
-    public static void Withdraw(Card card, decimal amount)
+    // Call to spend for any card.
+    public static void Spend(Card card, decimal amount)
     {
-        EnsureDebitCard(card);
+        // Inside Spend so no caller can move money off a frozen or closed card
+        // by forgetting the check.
+        EnsureSpendable(card);
+        MoneyPolicy.EnsureValid(card.Id, amount);
 
-        if (amount <= 0m)
-            throw new InvalidAmountException(card.Id, amount);
+        if(card.CardType == CardType.Debit)
+        {
+            if (amount > card.Balance)
+                throw new InsufficientBalanceException(card.Id, amount, card.Balance);
 
-        if (amount > card.Balance)
-            throw new InsufficientBalanceException(card.Id, amount, card.Balance);
+            card.Balance -= amount;
+        }
+        else
+        {
+            var budget = card.GetRequiredBudget();
 
-        card.Balance -= amount;
+            BudgetPolicy.Spend(budget, amount);
+        }
     }
 
     public static void Deposit(Card card, decimal amount)
     {
         EnsureDebitCard(card);
-
-        if (amount <= 0m)
-            throw new InvalidAmountException(card.Id, amount);
+        MoneyPolicy.EnsureValid(card.Id, amount);
 
         card.Balance += amount;
     }
@@ -86,5 +112,40 @@ public static class CardPolicy
 
         card.Status = newStatus;
     }
+
+    private static void EnsureDebitCard(Card card)
+    {
+        if (card.CardType != CardType.Debit)
+            throw new InvalidCardException(
+                card.Id,
+                $"balance operations apply to debit cards only; this is a {card.CardType} card.");
+
+    }
+
+    // If spentAmount for all children and parent is zero you can cascade the delete.
+    private static void EnsureCreditCardSettled(Card card)
+    {
+        var budget = card.GetRequiredBudget();
+
+        if (budget.SpentAmount > 0m)
+            throw new InvalidCardException(
+                card.Id,
+                $"cannot close a card with {budget.SpentAmount:N2} outstanding. Settle it first.");
+
+        foreach (var child in card.VirtualCards.Where(v => v.Status != CardStatus.Closed))
+        {
+            var childBudget = child.GetRequiredBudget();
+
+            if (childBudget.SpentAmount > 0m)
+                throw new InvalidCardException(
+                    card.Id,
+                    $"cannot close: virtual card ****{child.Last4} has "
+                  + $"{childBudget.SpentAmount:N2} outstanding.");
+        }
+    }
+
+    private static Budget GetRequiredBudget(this Card card)
+    => card.Budget ?? throw new InvalidCardException(
+        card.Id, $"{card.CardType} card budget was not found.");
 
 }

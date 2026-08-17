@@ -22,6 +22,12 @@ public class UnitOfWork : IUnitOfWork
         {
             return await _context.SaveChangesAsync(ct);
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            _context.ChangeTracker.Clear();
+
+            throw new ConcurrencyConflictException();
+        }
         catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
             // The failed entity is still tracked. Without this, the next

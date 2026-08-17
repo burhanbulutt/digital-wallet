@@ -44,6 +44,7 @@ public static class DependencyInjection
         services.AddScoped<ICardRepository, CardRepository>();
         services.AddScoped<ICardHolderRepository, CardHolderRepository>();
         services.AddScoped<IBudgetRepository, BudgetRepository>();
+        services.AddScoped<ICardTransactionRepository, CardTransactionRepository>();
         services.AddScoped<IProcessLogger, ProcessLogger>();
 
         return services;

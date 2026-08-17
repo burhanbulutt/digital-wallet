@@ -79,12 +79,18 @@ public class CardRepository : ICardRepository
             .FirstOrDefaultAsync(ct);
 
 
-    public async Task<Card?> GetTrackedByIdAsync(Guid id, CancellationToken ct = default)
+    public async Task<Card?> GetTrackedForStatusChangeAsync(Guid id, CancellationToken ct = default)
+        => await _context.Cards
+            .Include(c => c.Budget)
+            .Include(c => c.MainCard!).ThenInclude(p => p.Budget)
+            .Include(c => c.VirtualCards).ThenInclude(v => v.Budget)
+            .FirstOrDefaultAsync(c => c.Id == id, ct);
+
+    public async Task<Card?> GetTrackedForSpendAsync(Guid id, CancellationToken ct = default)
         => await _context.Cards
             .Include(c => c.Budget)
             .FirstOrDefaultAsync(c => c.Id == id, ct);
 
-    // CardRepository
     public async Task<(CardDto Dto, Guid OwnerId)?> GetDtoWithOwnerAsync(
         Guid id, CancellationToken ct = default)
     {

@@ -7,4 +7,7 @@ public class InvalidAmountException : DomainException
 
     public InvalidAmountException(decimal amount)
         : base($"Amount must be greater than zero (received {amount:N2}).") { }
+
+    public InvalidAmountException(Guid entityId, decimal amount, string reason)
+        : base($"Invalid amount {amount:N2}: {reason}", entityId) { }
 }

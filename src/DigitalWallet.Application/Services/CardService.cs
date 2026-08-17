@@ -187,7 +187,7 @@ public class CardService : ICardService
     public async Task<CardDto> UpdateStatusAsync(
         Guid id, Guid cardHolderId, CardStatus newStatus, CancellationToken ct = default)
     {
-        var card = await _cardRepository.GetTrackedByIdAsync(id, ct)
+        var card = await _cardRepository.GetTrackedForStatusChangeAsync(id, ct)
                    ?? throw new CardNotFoundException(id);
     
         if (card.CardHolderId != cardHolderId)
@@ -195,14 +195,21 @@ public class CardService : ICardService
     
         var previous = card.Status;
 
-        // TODO: I didnt handle the case where card is closed yet.
-    
-        CardPolicy.TransitionTo(card, newStatus);
+        if (newStatus == CardStatus.Closed)
+            CardPolicy.Close(card);
+        else
+            CardPolicy.TransitionTo(card, newStatus);
+
         await _unitOfWork.SaveChangesAsync(ct);
     
         await _processLogger.LogAsync(
             ProcessName.CardStatusUpdate, LogLevel.Success,
             $"Card status changed from {previous} to {newStatus}.", card.Id, ct);
+
+        if (newStatus == CardStatus.Closed && card.CardType == CardType.Debit && card.Balance > 0m)
+            await _processLogger.LogAsync(
+                ProcessName.CardStatusUpdate, LogLevel.Warn,
+                $"Debit card closed holding {card.Balance:N2}.", card.Id, ct);
     
         return CardDto.From(card);
     }
