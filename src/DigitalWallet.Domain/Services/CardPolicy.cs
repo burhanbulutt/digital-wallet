@@ -113,6 +113,10 @@ public static class CardPolicy
         card.Status = newStatus;
     }
 
+    public static Budget GetRequiredBudget(this Card card)
+        => card.Budget ?? throw new InvalidCardException(
+            card.Id, $"{card.CardType} card budget was not found.");
+
     private static void EnsureDebitCard(Card card)
     {
         if (card.CardType != CardType.Debit)
@@ -143,9 +147,4 @@ public static class CardPolicy
                   + $"{childBudget.SpentAmount:N2} outstanding.");
         }
     }
-
-    private static Budget GetRequiredBudget(this Card card)
-    => card.Budget ?? throw new InvalidCardException(
-        card.Id, $"{card.CardType} card budget was not found.");
-
 }

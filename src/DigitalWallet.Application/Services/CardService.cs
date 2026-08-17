@@ -149,24 +149,6 @@ public class CardService : ICardService
         throw new UnreachableException();
     }
 
-    private async Task<Budget> LoadParentBudgetAsync(CardRequestDto request, CancellationToken ct)
-    {
-        // Scoped to the holder, so a virtual card can never be hung off someone
-        // else's credit limit.
-        var parent = await _cardRepository.GetTrackedByIdForHolderAsync(
-                         request.MainCardId!.Value, request.CardHolderId, ct)
-                     ?? throw new InvalidMainCardException("Main card not found for this holder.");
-
-        if (parent.CardType != CardType.Credit)
-            throw new InvalidMainCardException(parent.Id, "Main card must be a credit card.");
-
-        if (parent.Status != CardStatus.Active)
-            throw new InvalidMainCardException(parent.Id, "Main card must be active.");
-
-        return parent.Budget
-               ?? throw new InvalidMainCardException(parent.Id, "Main card has no budget.");
-    }
-
     public Task<PagedResult<CardDto>> GetPagedAsync(
         Guid cardHolderId, CardListFilter filter, PaginationQuery pagination,
         CancellationToken ct = default)
@@ -212,6 +194,24 @@ public class CardService : ICardService
                 $"Debit card closed holding {card.Balance:N2}.", card.Id, ct);
     
         return CardDto.From(card);
+    }
+
+    private async Task<Budget> LoadParentBudgetAsync(CardRequestDto request, CancellationToken ct)
+    {
+        // Scoped to the holder, so a virtual card can never be hung off someone
+        // else's credit limit.
+        var parent = await _cardRepository.GetTrackedByIdForHolderAsync(
+                         request.MainCardId!.Value, request.CardHolderId, ct)
+                     ?? throw new InvalidMainCardException("Main card not found for this holder.");
+
+        if (parent.CardType != CardType.Credit)
+            throw new InvalidMainCardException(parent.Id, "Main card must be a credit card.");
+
+        if (parent.Status != CardStatus.Active)
+            throw new InvalidMainCardException(parent.Id, "Main card must be active.");
+
+        return parent.Budget
+               ?? throw new InvalidMainCardException(parent.Id, "Main card has no budget.");
     }
     
 }

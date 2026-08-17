@@ -91,6 +91,12 @@ public class CardRepository : ICardRepository
             .Include(c => c.Budget)
             .FirstOrDefaultAsync(c => c.Id == id, ct);
 
+    public async Task<Card?> GetTrackedForLimitChangeAsync(Guid id, CancellationToken ct = default)
+        => await _context.Cards
+            .Include(c => c.Budget)
+            .Include(c => c.MainCard!).ThenInclude(p => p.Budget)
+            .FirstOrDefaultAsync(c => c.Id == id, ct);
+
     public async Task<(CardDto Dto, Guid OwnerId)?> GetDtoWithOwnerAsync(
         Guid id, CancellationToken ct = default)
     {

@@ -1,10 +1,10 @@
-using DigitalWallet.Domain.Entities;
-
 namespace DigitalWallet.Application.Interfaces.Infrastructure;
 
 public interface IBudgetRepository
 {
-    Task AddAsync(Budget budget, CancellationToken ct = default);
-    Task<Budget?> GetByCardIdAsync(Guid cardId, CancellationToken ct = default);
-    Task<decimal> SumCreditLimitsByHolderAsync(Guid cardHolderId, CancellationToken ct = default);
+    // Total limit already allocated across the holder's CREDIT cards. Virtual
+    // card limits are carved out of a parent, so they are excluded to avoid
+    // double-counting against the salary ceiling. Closed cards release theirs.
+    Task<decimal> SumCreditLimitsByHolderAsync(
+        Guid cardHolderId, CancellationToken ct = default);
 }
