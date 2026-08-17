@@ -21,20 +21,27 @@ public class ProcessLogger : IProcessLogger
         ProcessName process,
         LogLevel level,
         string message,
-        Guid? entityId = null,
-        CancellationToken ct = default)
+        Guid? entityId = null)
     {
-        await using var context = await _factory.CreateDbContextAsync(ct);// context is cleaned up asynchronously when it goes out of scope
-
-        context.ProcessLogs.Add(new ProcessLog
+        try
         {
-            ProcessName = process,
-            Level = level,
-            Message = message,
-            EntityId = entityId,
-            Timestamp = _timeProvider.GetUtcNow()
-        });
+            await using var context = await _factory.CreateDbContextAsync(CancellationToken.None);
 
-        await context.SaveChangesAsync(ct);
+            context.ProcessLogs.Add(new ProcessLog
+            {
+                ProcessName = process,
+                Level = level,
+                Message = message,
+                EntityId = entityId,
+                Timestamp = _timeProvider.GetUtcNow()
+            });
+
+            await context.SaveChangesAsync(CancellationToken.None);
+        }
+        catch(Exception)
+        {
+            throw new NotImplementedException();// TODO
+        }
+        
     }
 }

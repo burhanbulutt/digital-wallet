@@ -47,11 +47,10 @@ public class CardService : ICardService
         {
             await _processLogger.LogAsync(
                 ProcessName.CardCreation, LogLevel.Error,
-                $"Card creation failed: card holder '{request.CardHolderId}' not found.", request.CardHolderId,
-                ct: ct);
+                $"Card creation failed: card holder '{request.CardHolderId}' not found.", request.CardHolderId);
 
-            //throw new CardHolderNotFoundException(request.CardHolderId);
-            throw new Exception($"Card creation failed: card holder '{request.CardHolderId}' not found.");
+            throw new CardHolderNotFoundException(request.CardHolderId);
+            //throw new Exception($"Card creation failed: card holder '{request.CardHolderId}' not found.");
         }
 
         var activeCount = await _cardRepository.CountActiveByHolderAsync(request.CardHolderId, ct);
@@ -65,7 +64,7 @@ public class CardService : ICardService
                 ProcessName.CardCreation, LogLevel.Error,
                 $"Card creation failed: holder '{request.CardHolderId}' already has "
               + $"{activeCount} active cards (limit {CardPolicy.MaxActiveCardsPerHolder}).",
-                request.CardHolderId, ct: ct);
+                request.CardHolderId);
 
             throw;
         }
@@ -127,8 +126,7 @@ public class CardService : ICardService
                     await _processLogger.LogAsync(
                         ProcessName.CardCreation, LogLevel.Error,
                         $"Card creation failed after {MaxGenerationAttempts} collisions.",
-                        request.CardHolderId,
-                        ct: ct);
+                        request.CardHolderId);
                     throw;
                 }
 
@@ -138,7 +136,7 @@ public class CardService : ICardService
             await _processLogger.LogAsync(
                 ProcessName.CardCreation, LogLevel.Success,
                 $"{request.CardType} card created for holder '{request.CardHolderId}'.",
-                card.Id, ct);
+                card.Id);
 
             return new CardSecretsDto(
                 card.Id, cardNumber, card.ExpiryMonth, card.ExpiryYear,
@@ -186,12 +184,12 @@ public class CardService : ICardService
     
         await _processLogger.LogAsync(
             ProcessName.CardStatusUpdate, LogLevel.Success,
-            $"Card status changed from {previous} to {newStatus}.", card.Id, ct);
+            $"Card status changed from {previous} to {newStatus}.", card.Id);
 
         if (newStatus == CardStatus.Closed && card.CardType == CardType.Debit && card.Balance > 0m)
             await _processLogger.LogAsync(
                 ProcessName.CardStatusUpdate, LogLevel.Warn,
-                $"Debit card closed holding {card.Balance:N2}.", card.Id, ct);
+                $"Debit card closed holding {card.Balance:N2}.", card.Id);
     
         return CardDto.From(card);
     }

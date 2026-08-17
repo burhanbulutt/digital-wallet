@@ -8,6 +8,5 @@ public interface IProcessLogger
         ProcessName process,
         LogLevel level,
         string message,
-        Guid? entityId = null,
-        CancellationToken ct = default);
+        Guid? entityId = null);
 }

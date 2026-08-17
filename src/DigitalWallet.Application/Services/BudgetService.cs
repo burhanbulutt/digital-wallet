@@ -78,7 +78,7 @@ public class BudgetService : IBudgetService
                 await _processLogger.LogAsync(
                     ProcessName.BudgetUpdate, LogLevel.Success,
                     $"Card ****{card.Last4} limit changed from {previousLimit:N2} to {newLimit:N2}.",
-                    cardId, ct);
+                    cardId);
 
                 return CardDto.From(card);
             }
@@ -91,14 +91,14 @@ public class BudgetService : IBudgetService
                 await _processLogger.LogAsync(
                     ProcessName.BudgetUpdate, LogLevel.Error,
                     $"Limit change abandoned after {MaxRetryAttempts} concurrency conflicts.",
-                    cardId, ct);
+                    cardId);
                 throw;
             }
             catch (DomainException ex)
             {
                 await _processLogger.LogAsync(
                     ProcessName.BudgetUpdate, LogLevel.Error,
-                    $"Limit change rejected: {ex.Message}", cardId, ct);
+                    $"Limit change rejected: {ex.Message}", cardId);
                 throw;
             }
         }

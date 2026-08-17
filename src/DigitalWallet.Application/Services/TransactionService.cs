@@ -66,7 +66,7 @@ public class TransactionService : ITransactionService
 
                 await _processLogger.LogAsync(
                     ProcessName.TransactionCreation, LogLevel.Success,
-                    $"{request.Amount:N2} spent on card ****{card.Last4}.", transaction.Id, ct);
+                    $"{request.Amount:N2} spent on card ****{card.Last4}.", transaction.Id);
 
                 await LogThresholdCrossingAsync(card.Id, card.Last4, budget, was80, was100, ct);
 
@@ -81,14 +81,14 @@ public class TransactionService : ITransactionService
             {
                 await _processLogger.LogAsync(
                     ProcessName.TransactionCreation, LogLevel.Error,
-                    $"Spend abandoned after {MaxRetryAttempts} concurrency conflicts.", cardId, ct);
+                    $"Spend abandoned after {MaxRetryAttempts} concurrency conflicts.", cardId);
                 throw;
             }
             catch (DomainException ex)
             {
                 await _processLogger.LogAsync(
                     ProcessName.TransactionCreation, LogLevel.Error,
-                    $"Spend rejected: {ex.Message}", cardId, ct);
+                    $"Spend rejected: {ex.Message}", cardId);
                 throw;
             }
         }
@@ -110,14 +110,14 @@ public class TransactionService : ITransactionService
             await _processLogger.LogAsync(
                 ProcessName.BudgetWarning, LogLevel.Warn,
                 $"Card ****{last4} reached 100% of its {budget.LimitAmount:N2} limit "
-              + $"({budget.SpentAmount:N2} spent).", cardId, ct);
+              + $"({budget.SpentAmount:N2} spent).", cardId);
         }
         else if (!was80 && budget.WarningThreshold80)
         {
             await _processLogger.LogAsync(
                 ProcessName.BudgetWarning, LogLevel.Warn,
                 $"Card ****{last4} reached 80% of its {budget.LimitAmount:N2} limit "
-              + $"({budget.SpentAmount:N2} spent).", cardId, ct);
+              + $"({budget.SpentAmount:N2} spent).", cardId);
         }
     }
 }
