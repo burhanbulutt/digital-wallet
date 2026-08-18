@@ -19,13 +19,25 @@ public class CardTransactionsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Add(
         Guid cardId,
-        [FromQuery] Guid cardHolderId,          //will come from the JWT
+        [FromQuery] Guid cardHolderId,          
         [FromBody] CreateTransactionRequest request,
         CancellationToken ct)
     {
         var created = await _transactionService.AddAsync(cardId, cardHolderId, request, ct);
         return CreatedAtAction(nameof(GetPaged), new { cardId }, created);
     }
+
+    // Pays down this card's(virtual or credit) debt from one of the holder's debit cards.
+    [HttpPost("payments")]
+    [ProducesResponseType(typeof(DebtPaymentDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> PayDebt(
+        Guid cardId,
+        [FromQuery] Guid cardHolderId,        
+        [FromBody] PayDebtRequest request,
+        CancellationToken ct)
+        => Ok(await _transactionService.PayDebtAsync(cardId, cardHolderId, request, ct));
 
     [HttpGet]
     [ProducesResponseType(typeof(PagedResult<TransactionDto>), StatusCodes.Status200OK)]

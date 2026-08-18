@@ -85,12 +85,41 @@ public static class CardPolicy
         }
     }
 
-    public static void Deposit(Card card, decimal amount)
+    public static void Withdraw(Card card, decimal amount)
     {
         EnsureDebitCard(card);
+        EnsureSpendable(card);
         MoneyPolicy.EnsureValid(card.Id, amount);
 
-        card.Balance += amount;
+        if (amount > card.Balance)
+            throw new InsufficientBalanceException(card.Id, amount, card.Balance);
+
+        card.Balance -= amount;
+    }
+
+    // Any incoming money: a top-up, a POS refund, a transfer in, a debt payment.
+    // The card only sees "money arrived"
+    // Debit gains balance; credit and virtual owe less.
+    public static void Load(Card card, decimal amount)
+    {
+        EnsureCanReceive(card);
+        MoneyPolicy.EnsureValid(card.Id, amount);
+
+        if (card.CardType == CardType.Debit)
+        {
+            card.Balance += amount;
+            return;
+        }
+
+        BudgetPolicy.Settle(card.GetRequiredBudget(), amount);
+    }
+
+    // Receiving is allowed while frozen, a refund or a debt payment on a frozen
+    // card should still land. Only a closed card refuses money.
+    public static void EnsureCanReceive(Card card)
+    {
+        if (card.Status == CardStatus.Closed)
+            throw new InvalidCardException(card.Id, "a closed card cannot receive money.");
     }
 
     // Same status transitions are rejected, cant request to freeze an already frozen card.

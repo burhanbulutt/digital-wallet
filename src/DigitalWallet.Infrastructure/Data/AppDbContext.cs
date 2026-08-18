@@ -143,6 +143,13 @@ public class AppDbContext : DbContext
                   .HasMaxLength(50)
                   .IsRequired();
 
+            // Incoming / Outgoing. CHK_CardTransaction_Direction guards the set.
+            entity.Property(e => e.Direction)
+                  .HasConversion<string>()
+                  .HasMaxLength(10)
+                  .IsUnicode(false)
+                  .IsRequired();
+
             // Foreign Key: CardTransaction -> Card
             entity.HasOne(t => t.Card)
                   .WithMany(c => c.Transactions)

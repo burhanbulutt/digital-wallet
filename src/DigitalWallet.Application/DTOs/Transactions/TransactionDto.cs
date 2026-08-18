@@ -8,13 +8,14 @@ public record TransactionDto(
     Guid Id,
     Guid CardId,
     decimal Amount,
+    TransactionDirection Direction,
     Category Category,
     string? Description,
     DateTimeOffset TransactionDate)
 {
-    
     public static Expression<Func<CardTransaction, TransactionDto>> Projection => t =>
-        new TransactionDto(t.Id, t.CardId, t.Amount, t.Category, t.Description, t.TransactionDate);
+        new TransactionDto(t.Id, t.CardId, t.Amount, t.Direction,
+                           t.Category, t.Description, t.TransactionDate);
 
     // Compiled once into a static field. One mapping definition, used as SQL by
     // the projection and as a delegate here.

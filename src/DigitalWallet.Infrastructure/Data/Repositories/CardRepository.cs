@@ -86,7 +86,7 @@ public class CardRepository : ICardRepository
             .Include(c => c.VirtualCards).ThenInclude(v => v.Budget)
             .FirstOrDefaultAsync(c => c.Id == id, ct);
 
-    public async Task<Card?> GetTrackedForSpendAsync(Guid id, CancellationToken ct = default)
+    public async Task<Card?> GetTrackedForTransactionAsync(Guid id, CancellationToken ct = default)
         => await _context.Cards
             .Include(c => c.Budget)
             .FirstOrDefaultAsync(c => c.Id == id, ct);

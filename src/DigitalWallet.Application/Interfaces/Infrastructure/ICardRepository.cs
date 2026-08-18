@@ -25,7 +25,7 @@ public interface ICardRepository
     Task<Card?> GetTrackedForStatusChangeAsync(Guid id, CancellationToken ct = default);
 
     // Tracked, with the Budget, because credit and virtual cards spend from it.
-    Task<Card?> GetTrackedForSpendAsync(Guid id, CancellationToken ct = default);
+    Task<Card?> GetTrackedForTransactionAsync(Guid id, CancellationToken ct = default);
 
     //  Difference is no children included, only parent included if exists. 
     Task<Card?> GetTrackedForLimitChangeAsync(Guid id, CancellationToken ct = default);

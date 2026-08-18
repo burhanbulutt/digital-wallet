@@ -29,6 +29,20 @@ public static class BudgetPolicy
         EvaluateThresholds(budget);
     }
 
+    // Overpayment is rejected, debt of card is paid
+    public static void Settle(Budget budget, decimal amount)
+    {
+        MoneyPolicy.EnsureValid(budget.CardId, amount);
+
+        if (amount > budget.SpentAmount)
+            throw new InvalidAmountException(
+                budget.CardId, amount, $"exceeds the outstanding {budget.SpentAmount:N2}.");
+
+        budget.SpentAmount -= amount;
+
+        EvaluateThresholds(budget);
+    }
+
     // Moving the virtual card's debt to it's parent(credit card) when closed.
     public static void MoveDebtOnClose(Budget childBudget, Budget parentBudget)
     {
@@ -113,7 +127,7 @@ public static class BudgetPolicy
     private static void EvaluateThresholds(Budget budget)
     {
         var ratio = budget.SpentAmount / budget.LimitAmount;
-        if (ratio >= WarningRatio80) budget.WarningThreshold80 = true;
-        if (ratio >= 1m) budget.WarningThreshold100 = true;
+        budget.WarningThreshold80 = ratio >= WarningRatio80;
+        budget.WarningThreshold100 = ratio >= 1m;
     }
 }
