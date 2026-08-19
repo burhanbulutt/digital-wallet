@@ -12,6 +12,7 @@ public static class DependencyInjection
         services.AddScoped<ICardService, CardService>();
         services.AddScoped<ITransactionService, TransactionService>();
         services.AddScoped<IBudgetService, BudgetService>();
+        services.AddScoped<ITransferService, TransferService>();
 
         return services;
     }

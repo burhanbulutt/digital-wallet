@@ -38,6 +38,8 @@ public class UnitOfWork : IUnitOfWork
         }
     }
 
+    public void Discard() => _context.ChangeTracker.Clear();
+
     private static bool IsUniqueViolation(DbUpdateException ex)
         => ex.InnerException is SqlException sql
            && sql.Number is UniqueIndexViolation or UniqueConstraintViolation;

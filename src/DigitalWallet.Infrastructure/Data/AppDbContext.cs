@@ -218,8 +218,17 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Status)
                   .HasConversion<string>()
                   .HasMaxLength(50)
-                  .IsRequired()
-                  .HasDefaultValueSql("'Pending'");
+                  .IsRequired();
+
+            entity.Property(e => e.FailureReason).HasMaxLength(200);
+
+            entity.Property(e => e.IdempotencyKey)
+                  .HasMaxLength(64).IsUnicode(false).IsRequired();
+
+            entity.HasIndex(e => e.IdempotencyKey)
+                  .IsUnique()
+                  .HasDatabaseName("UQ_Transfer_IdempotencyKey")
+                  .HasFilter("[IsDeleted] = 0");
 
             // SQL Defaults for Base Entity properties
             entity.Property(e => e.CreatedAt).HasDefaultValueSql(UtcNowSql);
