@@ -133,6 +133,10 @@ public class TransferService : ITransferService
         }
     }
 
+
+    // Important: If I see a problem regarding those 2 "record non-completed entity" methods, 
+    // using factory created context might be the solution
+    // (fix: follow the same pattern as ProcessLogger)
     private async Task RecordCancelledTransferAsync(
         Guid fromCardId, Guid toCardId, decimal amount, string idempotencyKey)
     {
@@ -153,7 +157,7 @@ public class TransferService : ITransferService
         Guid fromCardId, Guid toCardId, decimal amount, string idempotencyKey, string reason)
     {
         // every exception is already thrown before modifying any entity, not load bearing "Today". 
-        // If one day, with a code refactor, a domain exception is thrown after a modification, this will be useful.
+        // If one day, with a code refactor, a domain exception is thrown after the modification, this will be useful.
         _unitOfWork.Discard(); 
 
         var failed = TransferPolicy.Failed(

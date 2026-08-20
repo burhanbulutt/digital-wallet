@@ -2,6 +2,7 @@ using DigitalWallet.Application.DTOs.Common;
 using DigitalWallet.Application.DTOs.Transactions;
 using DigitalWallet.Application.Interfaces.Infrastructure;
 using DigitalWallet.Domain.Entities;
+using DigitalWallet.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace DigitalWallet.Infrastructure.Data.Repositories;
@@ -15,29 +16,11 @@ public class CardTransactionRepository : ICardTransactionRepository
     public async Task AddAsync(CardTransaction transaction, CancellationToken ct = default)
         => await _context.CardTransactions.AddAsync(transaction, ct);
 
-    public async Task<PagedResult<TransactionDto>> GetPagedForCardAsync(
-        Guid cardId, Guid cardHolderId, TransactionListFilter filter,
-        PaginationQuery pagination, CancellationToken ct = default)
-    {
-        var query = _context.CardTransactions
+    public async Task<TransactionDto?> GetByIdempotencyKeyAsync(
+        string idempotencyKey, Guid cardId, CancellationToken ct = default)
+        => await _context.CardTransactions
             .AsNoTracking()
-            .Where(t => t.CardId == cardId && t.Card.CardHolderId == cardHolderId);
-
-        if (filter.From is not null)     query = query.Where(t => t.TransactionDate >= filter.From);
-        if (filter.To is not null)       query = query.Where(t => t.TransactionDate <  filter.To);
-        if (filter.Category is not null) query = query.Where(t => t.Category == filter.Category);
-
-        var totalCount = await query.CountAsync(ct);
-
-        var items = await query
-            .OrderByDescending(t => t.TransactionDate)
-            .ThenBy(t => t.Id)          // rows sharing a timestamp
-                                        // can't repeat or vanish across pages
-            .Skip(pagination.Skip)
-            .Take(pagination.PageSize)
+            .Where(t => t.IdempotencyKey == idempotencyKey && t.CardId == cardId)
             .Select(TransactionDto.Projection)
-            .ToListAsync(ct);
-
-        return new PagedResult<TransactionDto>(items, pagination.Page, pagination.PageSize, totalCount);
-    }
+            .FirstOrDefaultAsync(ct);
 }

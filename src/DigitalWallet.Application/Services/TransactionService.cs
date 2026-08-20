@@ -34,38 +34,51 @@ public class TransactionService : ITransactionService
     }
 
     public async Task<TransactionDto> AddAsync(
-        Guid cardId, Guid cardHolderId, CreateTransactionRequest request,
-        CancellationToken ct = default)
+        Guid cardId, Guid cardHolderId, string idempotencyKey,
+        CreateTransactionRequest request, CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(idempotencyKey))
+            throw new InvalidCardException(cardId, "an Idempotency-Key header is required.");
+
+        // A retried request returns the original outcome instead of charging twice.
+        var existing = await _transactionRepository
+            .GetByIdempotencyKeyAsync(idempotencyKey, cardId, ct);
+
+        if (existing is not null)
+            return existing;
+
         for (var attempt = 1; ; attempt++)
         {
+            Card? card = null;
+            Budget? budget = null;
+            bool was80 = false, was100 = false;
+
             try
             {
                 // Re-read on every attempt. A conflict clears the change tracker,
                 // so retrying with the previous entities would use stale RowVersions.
-                var card = await _cardRepository.GetTrackedForTransactionAsync(cardId, ct)
+                card = await _cardRepository.GetTrackedForTransactionAsync(cardId, ct)
                            ?? throw new CardNotFoundException(cardId);
 
                 if (card.CardHolderId != cardHolderId)
                     throw new UnauthorizedCardAccessException(cardId);
 
                 // Captured before the spend. Because it is only way to know threshold was crossed by this
-                var budget = card.Budget;
-                var was80 = budget?.WarningThreshold80 ?? false;
-                var was100 = budget?.WarningThreshold100 ?? false;
+                budget = card.Budget;
+                was80 = budget?.WarningThreshold80 ?? false;
+                was100 = budget?.WarningThreshold100 ?? false;
 
                 var now = _timeProvider.GetUtcNow();
 
                 var transaction = request.Direction == TransactionDirection.Incoming
                     ? TransactionPolicy.RecordLoad(
-                        card, request.Amount, request.Category, request.Description, now)
+                        card, request.Amount, request.Category, request.Description, idempotencyKey, now)
                     : TransactionPolicy.RecordSpend(
-                        card, request.Amount, request.Category, request.Description, now);
+                        card, request.Amount, request.Category, request.Description, idempotencyKey, now);
 
                 // One SaveChanges covers the transaction row plus Card.Balance or
                 // Budget.SpentAmount, so EF wraps them in a single transaction.
                 await _transactionRepository.AddAsync(transaction, ct);
-
                 await _unitOfWork.SaveChangesAsync(ct);
 
                 await _processLogger.LogAsync(
@@ -73,7 +86,7 @@ public class TransactionService : ITransactionService
                     $"{request.Direction} transaction of {request.Amount:N2} on card ****{card.Last4}.",
                     transaction.Id);
 
-                await LogThresholdCrossingAsync(card.Id, card.Last4, budget, was80, was100, ct);
+                await LogThresholdCrossingAsync(card.Id, card.Last4, budget, was80, was100);
 
                 return TransactionDto.From(transaction);
             }
@@ -82,116 +95,81 @@ public class TransactionService : ITransactionService
                 // Jitter, so two colliding requests don't retry in lockstep.
                 await Task.Delay(Random.Shared.Next(20, 80), ct);
             }
+            // no row, so the key stays usable and a retry can succeed.
             catch (ConcurrencyConflictException)
             {
-                await _processLogger.LogAsync(
-                    ProcessName.TransactionCreation, LogLevel.Error,
-                    $"{request.Direction} money rejected after {MaxRetryAttempts} concurrency conflicts.", cardId);
+                await LogFailureAsync(cardId, request.Amount,
+                    $"abandoned after {MaxRetryAttempts} concurrency conflicts");
+                throw;
+            }
+            // Access failures write no row.
+            catch (Exception ex) when (ex is CardNotFoundException or UnauthorizedCardAccessException)
+            {
+                await LogFailureAsync(cardId, request.Amount, ex.Message);
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                // Everything here uses CancellationToken.None. the request token is already cancelled, so passing
+                // it would fail before writing anything.
+
+                // The token fired while awaiting the result, so the commit may or may not
+                // have landed. (Case: cancellation fires after the command reaches SQL Server)
+                var committed = await _transactionRepository
+                    .GetByIdempotencyKeyAsync(idempotencyKey, cardId, CancellationToken.None);
+
+                if (committed is not null)
+                {
+                    await LogThresholdCrossingAsync(card!.Id, card.Last4, budget, was80, was100);
+                    // It landed. The money moved.
+                    await _processLogger.LogAsync(
+                        ProcessName.TransactionCreation, LogLevel.Success,
+                        $"{request.Amount:N2} recorded on card {cardId}; "
+                      + "client disconnected before the response was sent.", committed.Id);
+                }
+                else
+                {
+                    await RecordUnsuccessfulAsync(cardId, request, idempotencyKey, reason: null);
+                }
+
                 throw;
             }
             catch (DomainException ex)
             {
-                await _processLogger.LogAsync(
-                    ProcessName.TransactionCreation, LogLevel.Error,
-                    $"{request.Direction} money rejected: {ex.Message}", cardId);
+                await RecordUnsuccessfulAsync(cardId, request, idempotencyKey, ex.Message);
                 throw;
             }
         }
     }
 
-    public Task<PagedResult<TransactionDto>> GetPagedAsync(
-        Guid cardId, Guid cardHolderId, TransactionListFilter filter,
-        PaginationQuery pagination, CancellationToken ct = default)
-        => _transactionRepository.GetPagedForCardAsync(cardId, cardHolderId, filter, pagination, ct);
-
-    public async Task<DebtPaymentDto> PayDebtAsync(
-        Guid debtCardId, Guid cardHolderId, PayDebtRequest request,
-        CancellationToken ct = default)
+    // A null reason means the client disconnected before the commit landed;
+    // anything else is a business rejection.
+    private async Task RecordUnsuccessfulAsync(
+        Guid cardId, CreateTransactionRequest request, string idempotencyKey, string? reason)
     {
-        if (debtCardId == request.SourceCardId)
-            throw new InvalidCardException(debtCardId, "a card cannot pay off itself.");
+        // Load bearing for cancelled transactions.
+        _unitOfWork.Discard();
 
-        for (var attempt = 1; ; attempt++)
-        {
-            try
-            {
-                // Both re-read every attempt: two rows are written, so either
-                // RowVersion can lose and the tracker gets cleared.
-                var debtCard = await _cardRepository.GetTrackedForTransactionAsync(debtCardId, ct)
-                               ?? throw new CardNotFoundException(debtCardId);
+        var now = _timeProvider.GetUtcNow();
 
-                var sourceCard = await _cardRepository.GetTrackedForTransactionAsync(request.SourceCardId, ct)
-                                ?? throw new CardNotFoundException(request.SourceCardId);
+        var row = reason is null
+            ? TransactionPolicy.Cancelled(
+                cardId, request.Amount, request.Direction,
+                request.Category, request.Description, idempotencyKey, now)
+            : TransactionPolicy.Failed(
+                cardId, request.Amount, request.Direction,
+                request.Category, request.Description, idempotencyKey, reason, now);
 
-                if (debtCard.CardHolderId != cardHolderId)
-                    throw new UnauthorizedCardAccessException(debtCardId);
+        await _transactionRepository.AddAsync(row, CancellationToken.None);
 
-                if (sourceCard.CardHolderId != cardHolderId)
-                    throw new UnauthorizedCardAccessException(request.SourceCardId);
+        await _unitOfWork.SaveChangesAsync(CancellationToken.None);
 
-                if (sourceCard.CardType != CardType.Debit)
-                    throw new InvalidCardException(
-                        sourceCard.Id, "debt can only be paid from a debit card.");
-
-                if (debtCard.CardType == CardType.Debit)
-                    throw new InvalidCardException(debtCard.Id, "a debit card carries no debt.");
-
-                var budget = debtCard.GetRequiredBudget();
-                var was80 = budget.WarningThreshold80;
-                var was100 = budget.WarningThreshold100;
-
-                var now = _timeProvider.GetUtcNow();
-
-                var incoming = TransactionPolicy.RecordLoad(
-                    debtCard, request.Amount, Category.Diger,
-                    $"Debt payment from card ****{sourceCard.Last4}", now);
-
-                var outgoing = TransactionPolicy.RecordSpend(
-                    sourceCard, request.Amount, Category.Diger,
-                    $"Debt payment to card ****{debtCard.Last4}", now);
-
-                await _transactionRepository.AddAsync(incoming, ct);
-                await _transactionRepository.AddAsync(outgoing, ct);
-
-                await _unitOfWork.SaveChangesAsync(ct);
-
-                await _processLogger.LogAsync(
-                    ProcessName.TransactionCreation, LogLevel.Success,
-                    $"{request.Amount:N2} paid from card ****{sourceCard.Last4} "
-                  + $"toward card ****{debtCard.Last4}.", incoming.Id);
-
-                await LogThresholdCrossingAsync(
-                    debtCard.Id, debtCard.Last4, budget, was80, was100, ct);
-
-                return new DebtPaymentDto(
-                    debtCard.Id, sourceCard.Id, request.Amount,
-                    budget.SpentAmount, sourceCard.Balance, now);
-            }
-            catch (ConcurrencyConflictException) when (attempt < MaxRetryAttempts)
-            {
-                await Task.Delay(Random.Shared.Next(20, 80), ct);
-            }
-            catch (ConcurrencyConflictException)
-            {
-                await _processLogger.LogAsync(
-                    ProcessName.TransactionCreation, LogLevel.Error,
-                    $"Debt payment abandoned after {MaxRetryAttempts} concurrency conflicts.",
-                    debtCardId);
-                throw;
-            }
-            catch (DomainException ex)
-            {
-                await _processLogger.LogAsync(
-                    ProcessName.TransactionCreation, LogLevel.Error,
-                    $"Debt payment rejected: {ex.Message}", debtCardId);
-                throw;
-            }
-        }
+        await LogFailureAsync(cardId, request.Amount,
+            reason ?? "client disconnected before the transaction committed");
     }
 
     private async Task LogThresholdCrossingAsync(
-        Guid cardId, string last4, Budget? budget,
-        bool was80, bool was100, CancellationToken ct)
+        Guid cardId, string last4, Budget? budget, bool was80, bool was100)
     {
         if (budget is null) return;
 
@@ -211,4 +189,9 @@ public class TransactionService : ITransactionService
               + $"({budget.SpentAmount:N2} spent).", cardId);
         }
     }
+
+    private Task LogFailureAsync(Guid cardId, decimal amount, string reason)
+        => _processLogger.LogAsync(
+            ProcessName.TransactionCreation, LogLevel.Error,
+            $"Transaction of {amount:N2} failed: {reason}", cardId);
 }

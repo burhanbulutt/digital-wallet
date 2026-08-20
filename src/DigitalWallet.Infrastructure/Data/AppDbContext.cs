@@ -150,6 +150,23 @@ public class AppDbContext : DbContext
                   .IsUnicode(false)
                   .IsRequired();
 
+            entity.Property(e => e.Status)
+                  .HasConversion<string>()
+                  .HasMaxLength(20)
+                  .IsUnicode(false)
+                  .IsRequired();
+
+            entity.Property(e => e.FailureReason).HasMaxLength(200);
+
+            entity.Property(e => e.IdempotencyKey)
+                  .HasMaxLength(64).IsUnicode(false).IsRequired();
+
+            // Per card, not global: a debt payment writes two rows under one key
+            entity.HasIndex(e => new { e.IdempotencyKey, e.CardId })
+                  .IsUnique()
+                  .HasDatabaseName("IX_CardTransaction_IdempotencyKey_CardId")
+                  .HasFilter("[IsDeleted] = 0");
+
             // Foreign Key: CardTransaction -> Card
             entity.HasOne(t => t.Card)
                   .WithMany(c => c.Transactions)
@@ -227,7 +244,7 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(e => e.IdempotencyKey)
                   .IsUnique()
-                  .HasDatabaseName("UQ_Transfer_IdempotencyKey")
+                  .HasDatabaseName("IX_Transfer_IdempotencyKey")
                   .HasFilter("[IsDeleted] = 0");
 
             // SQL Defaults for Base Entity properties

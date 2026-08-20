@@ -8,9 +8,6 @@ public interface ICardTransactionRepository
 {
     Task AddAsync(CardTransaction transaction, CancellationToken ct = default);
 
-    // Takes the holder id so ownership is a WHERE clause rather than a check
-    // the caller could forget.
-    Task<PagedResult<TransactionDto>> GetPagedForCardAsync(
-        Guid cardId, Guid cardHolderId, TransactionListFilter filter,
-        PaginationQuery pagination, CancellationToken ct = default);
+    Task<TransactionDto?> GetByIdempotencyKeyAsync(
+        string idempotencyKey, Guid cardId, CancellationToken ct = default);
 }
