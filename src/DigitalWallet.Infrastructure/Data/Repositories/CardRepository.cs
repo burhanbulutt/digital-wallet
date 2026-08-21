@@ -35,7 +35,8 @@ public class CardRepository : ICardRepository
         Guid id, Guid cardHolderId, CancellationToken ct = default)
         => await _context.Cards
             .Include(c => c.Budget)
-            .FirstOrDefaultAsync(c => c.Id == id && c.CardHolderId == cardHolderId, ct);
+            .FirstOrDefaultAsync(c => c.Id == id && c.CardHolderId == cardHolderId
+                                     && c.Status != CardStatus.Closed, ct);
 
     public async Task<int> CountActiveByHolderAsync(
         Guid cardHolderId, CancellationToken ct = default)

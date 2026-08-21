@@ -205,8 +205,9 @@ public class CardService : ICardService
         if (parent.CardType != CardType.Credit)
             throw new InvalidMainCardException(parent.Id, "Main card must be a credit card.");
 
+        // status cannot be closed, GetTrackedByIdForHolderAsync makes sure of it.
         if (parent.Status != CardStatus.Active)
-            throw new InvalidMainCardException(parent.Id, "Main card must be active.");
+            throw new CardStateConflictException(parent.Id, "Main card must be active.");
 
         return parent.Budget
                ?? throw new InvalidMainCardException(parent.Id, "Main card has no budget.");

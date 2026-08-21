@@ -30,9 +30,16 @@ public static class CardPolicy
     // TransferService both need it.
     public static void EnsureSpendable(Card card)
     {
-        if (card.Status != CardStatus.Active)
-            throw new InvalidCardException(
-                card.Id, $"card is {card.Status}; only an Active card can be used.");
+        if (card.Status == CardStatus.Active) return;
+
+        // if card is frozen, that is 409. if closed 400. a bad request will always be a bad request but a conflict 
+        // can be fixed. we cant unclose a card but we can unfreeze it.
+        if (card.Status == CardStatus.Frozen)
+            throw new CardStateConflictException(
+                card.Id, "card is Frozen; unfreeze it before using it.");
+
+        throw new InvalidCardException(
+            card.Id, $"card is {card.Status}; only an Active card can be used.");
     }
 
     public static void Close(Card card)
@@ -161,7 +168,7 @@ public static class CardPolicy
         var budget = card.GetRequiredBudget();
 
         if (budget.SpentAmount > 0m)
-            throw new InvalidCardException(
+            throw new CardStateConflictException(
                 card.Id,
                 $"cannot close a card with {budget.SpentAmount:N2} outstanding. Settle it first.");
 
@@ -170,7 +177,7 @@ public static class CardPolicy
             var childBudget = child.GetRequiredBudget();
 
             if (childBudget.SpentAmount > 0m)
-                throw new InvalidCardException(
+                throw new CardStateConflictException(
                     card.Id,
                     $"cannot close: virtual card ****{child.Last4} has "
                   + $"{childBudget.SpentAmount:N2} outstanding.");

@@ -34,6 +34,7 @@ public class UnitOfWork : IUnitOfWork
             // SaveChanges would retry the same doomed INSERT.
             _context.ChangeTracker.Clear();
 
+            // TODO: this should throw a general exception not just for card.
             throw new DuplicateCardException();
         }
     }
