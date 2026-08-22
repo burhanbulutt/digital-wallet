@@ -81,12 +81,12 @@ public class AppDbContext : DbContext
                   .IsRequired()
                   .HasDefaultValueSql("'Active'");
 
-            // C = Credit, D = Debit, V = Virtual. CHK_Card_CardType in the database
-            // is what guards against a value outside this set.
+            // C = Credit, D = Debit, V = Virtual, P = Prepaid. CHK_Card_CardType
+            // in the database guards against anything outside this set.
             entity.Property(e => e.CardType)
                   .HasConversion(
-                      v => v == CardType.Credit ? "C" : v == CardType.Debit ? "D" : "V",
-                      v => v == "C" ? CardType.Credit : v == "D" ? CardType.Debit : CardType.Virtual
+                      v => ToCardTypeCode(v),
+                      v => FromCardTypeCode(v)
                   )
                   .HasMaxLength(1)
                   .IsFixedLength()
@@ -212,6 +212,10 @@ public class AppDbContext : DbContext
                   .IsRequired()
                   .HasDefaultValue(0m);
 
+            // Prepaid only, null for credit and virtual. The UTC day SpentAmount
+            // is counting.
+            entity.Property(e => e.WindowStartDate).HasColumnType("date");
+
             // Credit cards only: the sum of child virtual card limits.
             entity.Property(e => e.ReservedAmount)
                   .HasColumnType("decimal(18,2)")
@@ -309,4 +313,24 @@ public class AppDbContext : DbContext
                   .IsRequired();
         });
     }
+
+    private static string ToCardTypeCode(CardType type) => type switch
+    {
+        CardType.Credit  => "C",
+        CardType.Debit   => "D",
+        CardType.Virtual => "V",
+        CardType.Prepaid => "P",
+        _ => throw new ArgumentOutOfRangeException(
+                 nameof(type), type, "Unknown CardType.")
+    };
+
+    private static CardType FromCardTypeCode(string code) => code switch
+    {
+        "C" => CardType.Credit,
+        "D" => CardType.Debit,
+        "V" => CardType.Virtual,
+        "P" => CardType.Prepaid,
+        _ => throw new ArgumentOutOfRangeException(
+                 nameof(code), code, "Unknown CardType code.")
+    };
 }

@@ -13,7 +13,7 @@ public static class TransactionPolicy
         Card card, decimal amount, Category category, string? description,
         string? idempotencyKey, DateTimeOffset when)
     {
-        CardPolicy.Spend(card, amount);
+        CardPolicy.Spend(card, amount, DateOnly.FromDateTime(when.UtcDateTime));
 
         return Record(card, amount, TransactionDirection.Outgoing,
                       category, description, idempotencyKey, when);

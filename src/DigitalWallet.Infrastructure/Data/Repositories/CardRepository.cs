@@ -10,8 +10,15 @@ namespace DigitalWallet.Infrastructure.Data.Repositories;
 public class CardRepository : ICardRepository
 {
     private readonly AppDbContext _context;
+    private readonly TimeProvider _timeProvider;
 
-    public CardRepository(AppDbContext context) => _context = context;
+    public CardRepository(AppDbContext context, TimeProvider timeProvider)
+    {
+        _context = context;
+        _timeProvider = timeProvider;
+    }
+
+    private DateOnly Today => DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
 
     //adds to the change tracker only, IUnitOfWork owns the commit.
     public async Task AddAsync(Card card, CancellationToken ct = default)
@@ -66,7 +73,7 @@ public class CardRepository : ICardRepository
                                         // CreatedAt can repeat or vanish across pages
             .Skip(pagination.Skip)
             .Take(pagination.PageSize)
-            .Select(CardDto.Projection)
+            .Select(CardDto.Projection(Today))
             .ToListAsync(ct);
 
         return new PagedResult<CardDto>(items, pagination.Page, pagination.PageSize, totalCount);
@@ -77,14 +84,14 @@ public class CardRepository : ICardRepository
         => await _context.Cards
             .AsNoTracking()
             .Where(c => c.IdempotencyKey == idempotencyKey && c.CardHolderId == cardHolderId)
-            .Select(CardDto.Projection)
+            .Select(CardDto.Projection(Today))
             .FirstOrDefaultAsync(ct);
 
     public async Task<CardDto?> GetDtoByIdAsync(Guid id, CancellationToken ct = default)
         => await _context.Cards
             .AsNoTracking()
             .Where(c => c.Id == id)
-            .Select(CardDto.Projection)
+            .Select(CardDto.Projection(Today))
             .FirstOrDefaultAsync(ct);
 
 
@@ -114,6 +121,6 @@ public class CardRepository : ICardRepository
             .Include(c => c.Budget)
             .FirstOrDefaultAsync(c => c.Id == id, ct);
     
-        return card is null ? null : (CardDto.From(card), card.CardHolderId);
+        return card is null ? null : (CardDto.From(card, Today), card.CardHolderId);
     }
 }

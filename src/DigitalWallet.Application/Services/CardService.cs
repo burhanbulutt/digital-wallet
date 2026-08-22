@@ -20,6 +20,7 @@ public class CardService : ICardService
     private readonly IBudgetRepository _budgetRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IProcessLogger _processLogger;
+    private readonly TimeProvider _timeProvider;
 
     public CardService(
         ICardGenerator cardGenerator,
@@ -27,7 +28,8 @@ public class CardService : ICardService
         ICardHolderRepository cardHolderRepository,
         IBudgetRepository budgetRepository,
         IUnitOfWork unitOfWork,
-        IProcessLogger processLogger)
+        IProcessLogger processLogger,
+        TimeProvider timeProvider)
     {
         _cardGenerator = cardGenerator;
         _cardRepository = cardRepository;
@@ -35,6 +37,7 @@ public class CardService : ICardService
         _budgetRepository = budgetRepository;
         _unitOfWork = unitOfWork;
         _processLogger = processLogger;
+        _timeProvider = timeProvider;
     }
 
     public async Task<CardCreationResult> CreateAsync(
@@ -93,6 +96,10 @@ public class CardService : ICardService
                 case CardType.Debit:
                     break;
 
+                case CardType.Prepaid:
+                    limitAmount = CardPolicy.DefaultPrepaidDailyLimit;
+                    break;
+
                 case CardType.Credit:
                     var allocated = await _budgetRepository
                         .SumCreditLimitsByHolderAsync(request.CardHolderId, ct);
@@ -120,6 +127,9 @@ public class CardService : ICardService
             {
                 CardType.Credit  => BudgetPolicy.AllocateForCreditCard(card, limitAmount),
                 CardType.Virtual => BudgetPolicy.AllocateForVirtualCard(card, parentBudget!, limitAmount),
+                CardType.Prepaid => BudgetPolicy.AllocateForPrepaidCard(
+                                        card, limitAmount,
+                                        DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime)),
                 _ => null   // Debit spends from Balance and has no allocation.
             };
 
@@ -209,13 +219,15 @@ public class CardService : ICardService
                 ProcessName.CardStatusUpdate, LogLevel.Success,
                 $"Card status changed from {previous} to {newStatus}.", card.Id);
 
-            if (newStatus == CardStatus.Closed && card.CardType == CardType.Debit && card.Balance > 0m)
+            if (newStatus == CardStatus.Closed
+                && card.CardType is CardType.Debit or CardType.Prepaid
+                && card.Balance > 0m)
                 await _processLogger.LogAsync(
                     ProcessName.CardStatusUpdate, LogLevel.Warn,
-                    $"Debit card closed holding {card.Balance:N2}.", card.Id);
+                    $"{card.CardType} card closed holding {card.Balance:N2}.", card.Id);
         }
 
-        return CardDto.From(card);
+        return CardDto.From(card, DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime));
     }
 
     private async Task<Budget> LoadParentBudgetAsync(CardRequestDto request, CancellationToken ct)

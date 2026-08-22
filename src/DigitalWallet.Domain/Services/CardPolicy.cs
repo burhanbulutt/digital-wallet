@@ -8,6 +8,7 @@ namespace DigitalWallet.Domain.Services;
 public static class CardPolicy
 {
     public const int MaxActiveCardsPerHolder = 5;
+    public const decimal DefaultPrepaidDailyLimit = 5_00m;
 
     public static void EnsureCanIssueCard(Guid cardHolderId, int activeCardCount)
     {
@@ -70,7 +71,7 @@ public static class CardPolicy
     }
 
     // Call to spend for any card.
-    public static void Spend(Card card, decimal amount)
+    public static void Spend(Card card, decimal amount, DateOnly today)
     {
         // Inside Spend so no caller can move money off a frozen or closed card
         // by forgetting the check.
@@ -84,6 +85,15 @@ public static class CardPolicy
 
             card.Balance -= amount;
         }
+        else if (card.CardType == CardType.Prepaid)
+        {
+            if (amount > card.Balance)
+                throw new InsufficientBalanceException(card.Id, amount, card.Balance);
+
+            BudgetPolicy.SpendDaily(card.GetRequiredBudget(), amount, today);
+
+            card.Balance -= amount;
+        }
         else
         {
             var budget = card.GetRequiredBudget();
@@ -92,9 +102,10 @@ public static class CardPolicy
         }
     }
 
+    // TODO: daily cap is not checked. Fix if you are gonna use this method.
     public static void Withdraw(Card card, decimal amount)
     {
-        EnsureDebitCard(card);
+        EnsureHasBalance(card);
         EnsureSpendable(card);
         MoneyPolicy.EnsureValid(card.Id, amount);
 
@@ -112,7 +123,7 @@ public static class CardPolicy
         EnsureCanReceive(card);
         MoneyPolicy.EnsureValid(card.Id, amount);
 
-        if (card.CardType == CardType.Debit)
+        if (card.CardType is CardType.Debit or CardType.Prepaid)
         {
             card.Balance += amount;
             return;
@@ -153,12 +164,12 @@ public static class CardPolicy
         => card.Budget ?? throw new InvalidCardException(
             card.Id, $"{card.CardType} card budget was not found.");
 
-    private static void EnsureDebitCard(Card card)
+    private static void EnsureHasBalance(Card card)
     {
-        if (card.CardType != CardType.Debit)
+        if (card.CardType is not (CardType.Debit or CardType.Prepaid))
             throw new InvalidCardException(
                 card.Id,
-                $"balance operations apply to debit cards only; this is a {card.CardType} card.");
+                $"balance operations apply to balance-backed cards only; this is a {card.CardType} card.");
 
     }
 

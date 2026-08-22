@@ -29,6 +29,50 @@ public static class BudgetPolicy
         EvaluateThresholds(budget);
     }
 
+    // Prepaid only.
+    public static void SpendDaily(Budget budget, decimal amount, DateOnly today)
+    {
+        MoneyPolicy.EnsureValid(budget.CardId, amount);
+
+        ResetWindowIfStale(budget, today);
+
+        var available = budget.LimitAmount - budget.SpentAmount;
+
+        if (amount > available)
+            throw new BudgetExceededException(
+                budget.CardId, budget.LimitAmount, budget.SpentAmount, amount);
+
+        budget.SpentAmount += amount;
+
+        EvaluateThresholds(budget);
+    }
+
+    public static void ResetWindowIfStale(Budget budget, DateOnly today)
+    {
+        if (budget.WindowStartDate == today) return;
+
+        budget.WindowStartDate = today;
+        budget.SpentAmount = 0m;
+        budget.WarningThreshold80 = false;
+        budget.WarningThreshold100 = false;
+    }
+
+    public static void ChangeDailyLimit(Budget budget, decimal newLimit, DateOnly today)
+    {
+        MoneyPolicy.EnsureValid(budget.CardId, newLimit);
+
+        ResetWindowIfStale(budget, today);
+
+        if (newLimit < budget.SpentAmount)
+            throw new CardStateConflictException(
+                budget.CardId,
+                $"{newLimit:N2} is below the {budget.SpentAmount:N2} already spent today.");
+
+        budget.LimitAmount = newLimit;
+
+        EvaluateThresholds(budget);
+    }
+
     // Overpayment is rejected, debt of card is paid
     public static void Settle(Budget budget, decimal amount)
     {
@@ -66,6 +110,16 @@ public static class BudgetPolicy
     {
         Reserve(parentBudget, limit);
         return Attach(child, limit);
+    }
+
+    public static Budget AllocateForPrepaidCard(Card card, decimal dailyLimit, DateOnly today)
+    {
+        MoneyPolicy.EnsureValid(card.Id, dailyLimit);
+
+        var budget = Attach(card, dailyLimit);
+        budget.WindowStartDate = today;
+
+        return budget;
     }
 
     // Both sides of the navigation, so adding the card alone also inserts the budget.

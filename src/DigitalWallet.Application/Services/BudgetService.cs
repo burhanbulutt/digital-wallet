@@ -17,19 +17,22 @@ public class BudgetService : IBudgetService
     private readonly IBudgetRepository _budgetRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IProcessLogger _processLogger;
+    private readonly TimeProvider _timeProvider;
 
     public BudgetService(
         ICardRepository cardRepository,
         ICardHolderRepository cardHolderRepository,
         IBudgetRepository budgetRepository,
         IUnitOfWork unitOfWork,
-        IProcessLogger processLogger)
+        IProcessLogger processLogger,
+        TimeProvider timeProvider)
     {
         _cardRepository = cardRepository;
         _cardHolderRepository = cardHolderRepository;
         _budgetRepository = budgetRepository;
         _unitOfWork = unitOfWork;
         _processLogger = processLogger;
+        _timeProvider = timeProvider;
     }
 
     public async Task<CardDto> UpdateLimitAsync(
@@ -68,6 +71,12 @@ public class BudgetService : IBudgetService
                         BudgetPolicy.ChangeVirtualCardLimit(budget, parentBudget, newLimit);
                         break;
 
+                    case CardType.Prepaid:
+                        BudgetPolicy.ChangeDailyLimit(
+                            budget, newLimit,
+                            DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime));
+                        break;
+
                     default:
                         throw new InvalidCardException(
                             cardId, $"a {card.CardType} card has no limit to change.");// just in case.
@@ -80,7 +89,7 @@ public class BudgetService : IBudgetService
                     $"Card ****{card.Last4} limit changed from {previousLimit:N2} to {newLimit:N2}.",
                     cardId);
 
-                return CardDto.From(card);
+                return CardDto.From(card, DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime));
             }
             catch (ConcurrencyConflictException) when (attempt < MaxRetryAttempts)
             {

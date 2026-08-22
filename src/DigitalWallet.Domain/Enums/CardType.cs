@@ -4,5 +4,6 @@ public enum CardType
 {
     Credit,
     Debit,
-    Virtual
+    Virtual,
+    Prepaid
 }

@@ -14,7 +14,7 @@ public static class TransferPolicy
     {
         EnsureTransferable(from, to);
 
-        CardPolicy.Spend(from, amount);
+        CardPolicy.Spend(from, amount, DateOnly.FromDateTime(when.UtcDateTime));
         CardPolicy.Load(to, amount);
 
         return new Transfer
@@ -65,14 +65,14 @@ public static class TransferPolicy
         if (from.Id == to.Id)
             throw new InvalidTransferException(from.Id, "a card cannot transfer to itself.");
 
-        EnsureDebit(from, "sender");
-        EnsureDebit(to, "receiver");
+        EnsureHasBalance(from, "sender");
+        EnsureHasBalance(to, "receiver");
     }
 
-    private static void EnsureDebit(Card card, string role)
+    private static void EnsureHasBalance(Card card, string role)
     {
-        if (card.CardType != CardType.Debit)
+        if (card.CardType is not (CardType.Debit or CardType.Prepaid))
             throw new InvalidTransferException(
-                card.Id, $"the {role} must be a debit card; this is a {card.CardType} card.");
+                card.Id, $"the {role} must be a balance-backed card; this is a {card.CardType} card.");
     }
 }

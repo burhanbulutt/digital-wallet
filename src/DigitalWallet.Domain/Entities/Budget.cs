@@ -14,6 +14,9 @@ public class Budget : BaseEntity
     // Credit cards only. the sum of child virtual card limits.
     public decimal ReservedAmount { get; set; }
 
+    // Prepaid cards only, null for everything else.
+    public DateOnly? WindowStartDate { get; set; }
+
     public bool WarningThreshold80 { get; set; }
     public bool WarningThreshold100 { get; set; }
 

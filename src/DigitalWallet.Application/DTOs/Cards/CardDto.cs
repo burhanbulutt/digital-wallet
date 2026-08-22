@@ -18,8 +18,7 @@ public record CardDto(
     Guid? MainCardId,
     DateTimeOffset CreatedAt)
 {
-    // used for select when querying for cards. this projects them into cardDto's so returned object(s) is CardDto
-    public static Expression<Func<Card, CardDto>> Projection => card => new CardDto(
+    public static Expression<Func<Card, CardDto>> Projection(DateOnly today) => card => new CardDto(
         card.Id,
         "**** **** **** " + card.Last4,
         card.CardType,
@@ -27,15 +26,17 @@ public record CardDto(
         card.Status,
         card.ExpiryMonth,
         card.ExpiryYear,
-        card.CardType == CardType.Debit ? card.Balance : null,
-        card.Budget != null ? card.Budget.LimitAmount : null,
-        card.Budget != null
-            ? card.Budget.LimitAmount - card.Budget.SpentAmount - card.Budget.ReservedAmount
+        card.CardType == CardType.Debit || card.CardType == CardType.Prepaid
+            ? card.Balance
             : null,
+        card.Budget != null ? card.Budget.LimitAmount : null,
+        card.Budget == null
+            ? null
+            : card.Budget.WindowStartDate != null && card.Budget.WindowStartDate != today
+                ? card.Budget.LimitAmount
+                : card.Budget.LimitAmount - card.Budget.SpentAmount - card.Budget.ReservedAmount,
         card.MainCardId,
         card.CreatedAt);
 
-    private static readonly Func<Card, CardDto> Compiled = Projection.Compile();
-
-    public static CardDto From(Card card) => Compiled(card);
+    public static CardDto From(Card card, DateOnly today) => Projection(today).Compile()(card);
 }

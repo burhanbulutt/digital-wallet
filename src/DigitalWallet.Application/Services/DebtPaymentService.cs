@@ -66,12 +66,12 @@ public class DebtPaymentService : IDebtPaymentService
                 if (sourceCard.CardHolderId != cardHolderId)
                     throw new UnauthorizedCardAccessException(request.SourceCardId);
 
-                if (sourceCard.CardType != CardType.Debit)
+                if (sourceCard.CardType is not (CardType.Debit or CardType.Prepaid))
                     throw new InvalidCardException(
-                        sourceCard.Id, "debt can only be paid from a debit card.");
+                        sourceCard.Id, "debt can only be paid from a debit or prepaid card.");
 
-                if (debtCard.CardType == CardType.Debit)
-                    throw new InvalidCardException(debtCard.Id, "a debit card carries no debt.");
+                if (debtCard.CardType is CardType.Debit or CardType.Prepaid)
+                    throw new InvalidCardException(debtCard.Id, $"a {debtCard.CardType} card carries no debt.");
 
                 var budget = debtCard.GetRequiredBudget();
                 var was80 = budget.WarningThreshold80;
