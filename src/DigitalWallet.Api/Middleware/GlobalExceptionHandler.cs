@@ -47,6 +47,16 @@ public class GlobalExceptionHandler : IExceptionHandler
                 exception.GetType().Name, nameof(GlobalExceptionHandler));
         }
 
+        if (exception is UniqueViolationException)
+        {
+            _logger.LogError(exception,
+                "An untranslated UniqueViolationException reached {Handler} on "
+              + "{Method} {Path}. Some service is not interpreting its unique "
+              + "constraints.",
+                nameof(GlobalExceptionHandler),
+                context.Request.Method, context.Request.Path);
+        }
+
         if (status >= StatusCodes.Status500InternalServerError)
         {
             _logger.LogError(exception, "Unhandled exception on {Method} {Path}.",
@@ -96,6 +106,7 @@ public class GlobalExceptionHandler : IExceptionHandler
 
         InvalidAmountException or InvalidCardException
             or InvalidMainCardException or InvalidTransferException
+            or UniqueViolationException
             => (StatusCodes.Status400BadRequest, "The request is not valid.", true),
 
         DomainException

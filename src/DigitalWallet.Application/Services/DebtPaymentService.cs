@@ -137,6 +137,15 @@ public class DebtPaymentService : IDebtPaymentService
 
                 throw;
             }
+            catch (UniqueViolationException)
+            {
+                var winner = await _transactionRepository.GetByIdempotencyKeyAsync(idempotencyKey, debtCardId, ct);
+
+                if (winner is not null)
+                    return winner;
+
+                throw;
+            }
             catch (DomainException ex)
             {
                 await RecordUnsuccessfulPairAsync(debtCardId, request, idempotencyKey, ex.Message);

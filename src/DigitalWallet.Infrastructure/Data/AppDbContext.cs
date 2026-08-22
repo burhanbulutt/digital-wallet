@@ -119,6 +119,16 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => e.CardNumberHash)
                   .IsUnique().HasDatabaseName("IX_Card_CardNumberHash");
 
+            entity.Property(e => e.IdempotencyKey)
+                  .HasMaxLength(64).IsUnicode(false).IsRequired();
+
+            // Per holder, not global: the key is an opaque client string, and two
+            // holders picking the same one must not collide.
+            entity.HasIndex(e => new { e.IdempotencyKey, e.CardHolderId })
+                  .IsUnique()
+                  .HasDatabaseName("IX_Card_IdempotencyKey_CardHolderId")
+                  .HasFilter("[IsDeleted] = 0");
+
             // Soft delete global filter
             entity.HasQueryFilter(e => !e.IsDeleted);
         });

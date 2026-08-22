@@ -37,10 +37,21 @@ public class CardService : ICardService
         _processLogger = processLogger;
     }
 
-    public async Task<CardSecretsDto> CreateAsync(
+    public async Task<CardCreationResult> CreateAsync(
         CardRequestDto request,
+        string idempotencyKey,
         CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(idempotencyKey))
+            throw new InvalidCardException(
+                request.CardHolderId, "an Idempotency-Key header is required.");
+
+        var replay = await _cardRepository
+            .GetDtoByIdempotencyKeyAsync(idempotencyKey, request.CardHolderId, ct);
+
+        if (replay is not null)
+            return CardCreationResult.Replay(replay);
+
         // this also answers "does this holder exist".
         var salary = await _cardHolderRepository.GetSalaryAsync(request.CardHolderId, ct);
         if (salary is null)
@@ -50,7 +61,6 @@ public class CardService : ICardService
                 $"Card creation failed: card holder '{request.CardHolderId}' not found.", request.CardHolderId);
 
             throw new CardHolderNotFoundException(request.CardHolderId);
-            //throw new Exception($"Card creation failed: card holder '{request.CardHolderId}' not found.");
         }
 
         var activeCount = await _cardRepository.CountActiveByHolderAsync(request.CardHolderId, ct);
@@ -104,6 +114,7 @@ public class CardService : ICardService
 
             card.CardHolderId = request.CardHolderId;
             card.MainCardId = request.MainCardId;
+            card.IdempotencyKey = idempotencyKey;
 
             var budget = request.CardType switch
             {
@@ -118,17 +129,27 @@ public class CardService : ICardService
                 await _cardRepository.AddAsync(card, ct);
                 await _unitOfWork.SaveChangesAsync(ct);
             }
-            catch (DuplicateCardException)
+            catch (UniqueViolationException)
             {
                 // database is the authority on uniqueness, not a pre check!!
-                if (attempt == MaxGenerationAttempts)
+                if (attempt >= MaxGenerationAttempts)
                 {
                     await _processLogger.LogAsync(
                         ProcessName.CardCreation, LogLevel.Error,
                         $"Card creation failed after {MaxGenerationAttempts} collisions.",
                         request.CardHolderId);
-                    throw;
+
+                    // Translated, so what leaves this service says what actually
+                    // went wrong instead of "some unique index fired".
+                    throw new DuplicateCardException(
+                        request.CardHolderId, MaxGenerationAttempts);
                 }
+                var winner = await _cardRepository
+                    .GetDtoByIdempotencyKeyAsync(idempotencyKey, request.CardHolderId, ct);
+
+                if (winner is not null)
+                    return CardCreationResult.Replay(winner);
+
 
                 continue;
             }
@@ -138,10 +159,10 @@ public class CardService : ICardService
                 $"{request.CardType} card created for holder '{request.CardHolderId}'.",
                 card.Id);
 
-            return new CardSecretsDto(
+            return CardCreationResult.New(new CardSecretsDto(
                 card.Id, cardNumber, card.ExpiryMonth, card.ExpiryYear,
                 card.Brand, card.CardType, card.Status,
-                budget?.LimitAmount, card.MainCardId);
+                budget?.LimitAmount, card.MainCardId));
         }
 
         throw new UnreachableException();
@@ -175,22 +196,25 @@ public class CardService : ICardService
     
         var previous = card.Status;
 
-        if (newStatus == CardStatus.Closed)
-            CardPolicy.Close(card);
-        else
-            CardPolicy.TransitionTo(card, newStatus);
+        if(previous != newStatus) // no need to throw an exception if status stays same.
+        {
+            if (newStatus == CardStatus.Closed)
+                CardPolicy.Close(card);
+            else
+                CardPolicy.TransitionTo(card, newStatus);
 
-        await _unitOfWork.SaveChangesAsync(ct);
-    
-        await _processLogger.LogAsync(
-            ProcessName.CardStatusUpdate, LogLevel.Success,
-            $"Card status changed from {previous} to {newStatus}.", card.Id);
+            await _unitOfWork.SaveChangesAsync(ct);
 
-        if (newStatus == CardStatus.Closed && card.CardType == CardType.Debit && card.Balance > 0m)
             await _processLogger.LogAsync(
-                ProcessName.CardStatusUpdate, LogLevel.Warn,
-                $"Debit card closed holding {card.Balance:N2}.", card.Id);
-    
+                ProcessName.CardStatusUpdate, LogLevel.Success,
+                $"Card status changed from {previous} to {newStatus}.", card.Id);
+
+            if (newStatus == CardStatus.Closed && card.CardType == CardType.Debit && card.Balance > 0m)
+                await _processLogger.LogAsync(
+                    ProcessName.CardStatusUpdate, LogLevel.Warn,
+                    $"Debit card closed holding {card.Balance:N2}.", card.Id);
+        }
+
         return CardDto.From(card);
     }
 

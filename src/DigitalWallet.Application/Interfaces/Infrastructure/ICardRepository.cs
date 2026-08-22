@@ -16,6 +16,9 @@ public interface ICardRepository
 
     Task<int> CountActiveByHolderAsync(Guid cardHolderId, CancellationToken ct = default);
 
+    Task<CardDto?> GetDtoByIdempotencyKeyAsync(
+        string idempotencyKey, Guid cardHolderId, CancellationToken ct = default);
+
     Task<PagedResult<CardDto>> GetPagedForHolderAsync(
         Guid cardHolderId, CardListFilter filter, PaginationQuery pagination,
         CancellationToken ct = default);

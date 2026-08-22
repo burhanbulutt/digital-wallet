@@ -83,14 +83,9 @@ public class TransferService : ITransferService
                 throw;// no Transfer row
             }
             // Access failures dont write Transfer row
-            catch (CardNotFoundException)
+            catch (Exception ex) when(ex is CardNotFoundException or UnauthorizedCardAccessException)
             {
-                await LogFailureAsync(fromCardId, request.Amount, "card not found");
-                throw;
-            }
-            catch (UnauthorizedCardAccessException)
-            {
-                await LogFailureAsync(fromCardId, request.Amount, "not the caller's card");
+                await LogFailureAsync(fromCardId, request.Amount, ex.Message);
                 throw;
             }
             catch (OperationCanceledException)
@@ -120,6 +115,15 @@ public class TransferService : ITransferService
                     await RecordCancelledTransferAsync(
                         fromCardId, request.ToCardId, request.Amount, idempotencyKey);
                 }
+
+                throw;
+            }
+            catch (UniqueViolationException)
+            {
+                var winner = await _transferRepository.GetByIdempotencyKeyAsync(idempotencyKey, ct);
+
+                if (winner is not null)
+                    return winner;
 
                 throw;
             }

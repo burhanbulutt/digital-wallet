@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using DigitalWallet.Application.DTOs.Cards;
 using DigitalWallet.Application.DTOs.Common;
 using DigitalWallet.Application.Interfaces.Services;
@@ -9,6 +10,10 @@ namespace DigitalWallet.Api.Controllers;
 [Route("api/v1/cards")]
 public class CardsController : ControllerBase
 {
+    private const string KeyPattern = @"^[A-Za-z0-9_\-]{8,64}$";
+    private const string KeyError =
+        "Idempotency-Key must be 8-64 characters of letters, digits, hyphen or underscore.";
+
     private readonly ICardService _cardService;
 
     public CardsController(ICardService cardService) => _cardService = cardService;
@@ -42,15 +47,24 @@ public class CardsController : ControllerBase
         => Ok(await _cardService.UpdateStatusAsync(id, cardHolderId, request.Status, ct));
 
 
-    /// Creates a virtual card. The response contains the full card number,
-    /// which is returned here once and is not retrievable afterwards.
     [HttpPost]
     [ProducesResponseType(typeof(CardSecretsDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(CardDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Create(
+        [FromHeader(Name = "Idempotency-Key")]
+        [Required]
+        [RegularExpression(KeyPattern, ErrorMessage = KeyError)]
+        string idempotencyKey,
         [FromBody] CardRequestDto request,
         CancellationToken ct)
     {
-        var card = await _cardService.CreateAsync(request, ct);
-        return CreatedAtAction(nameof(GetById), new { id = card.Id }, card);
+        var result = await _cardService.CreateAsync(request, idempotencyKey, ct);
+
+        return result.Existing is not null
+            ? Ok(result.Existing)
+            : CreatedAtAction(
+                nameof(GetById), new { id = result.Created!.Id }, result.Created);
     }
 }

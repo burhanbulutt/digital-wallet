@@ -22,6 +22,7 @@ public class Card : BaseEntity
     // Virtual cards only
     // CHK_Card_MainCard
     public Guid? MainCardId { get; set; }
+    public string IdempotencyKey { get; set; } = null!;
 
     public byte[] RowVersion { get; set; } = null!;
 

@@ -72,6 +72,14 @@ public class CardRepository : ICardRepository
         return new PagedResult<CardDto>(items, pagination.Page, pagination.PageSize, totalCount);
     }
 
+    public async Task<CardDto?> GetDtoByIdempotencyKeyAsync(
+        string idempotencyKey, Guid cardHolderId, CancellationToken ct = default)
+        => await _context.Cards
+            .AsNoTracking()
+            .Where(c => c.IdempotencyKey == idempotencyKey && c.CardHolderId == cardHolderId)
+            .Select(CardDto.Projection)
+            .FirstOrDefaultAsync(ct);
+
     public async Task<CardDto?> GetDtoByIdAsync(Guid id, CancellationToken ct = default)
         => await _context.Cards
             .AsNoTracking()

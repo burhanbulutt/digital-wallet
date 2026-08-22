@@ -134,6 +134,16 @@ public class TransactionService : ITransactionService
 
                 throw;
             }
+            // two request both do pre check, both see null and keep going. one of them wins other ones is catched here.
+            catch (UniqueViolationException)
+            {
+                var winner = await _transactionRepository.GetByIdempotencyKeyAsync(idempotencyKey, cardId, ct);
+
+                if (winner is not null)
+                    return winner;
+
+                throw;
+            }
             catch (DomainException ex)
             {
                 await RecordUnsuccessfulAsync(cardId, request, idempotencyKey, ex.Message);

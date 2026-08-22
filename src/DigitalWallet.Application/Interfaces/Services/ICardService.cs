@@ -6,7 +6,8 @@ namespace DigitalWallet.Application.Interfaces.Services;
 
 public interface ICardService
 {
-    Task<CardSecretsDto> CreateAsync(CardRequestDto request, CancellationToken ct = default);
+    Task<CardCreationResult> CreateAsync(
+        CardRequestDto request, string idempotencyKey, CancellationToken ct = default);
     
     Task<PagedResult<CardDto>> GetPagedAsync(
         Guid cardHolderId, CardListFilter filter, PaginationQuery pagination, CancellationToken ct = default);

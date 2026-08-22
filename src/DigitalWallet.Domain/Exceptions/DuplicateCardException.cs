@@ -1,11 +1,7 @@
 namespace DigitalWallet.Domain.Exceptions;
-
 public class DuplicateCardException : DomainException
 {
-    // only for ProcessLog, wont be shown to user. card number generation is automatic anyway.
-    //public DuplicateCardException(Guid entityId, string cardNumber)
-    //    : base($"A card with number '{cardNumber}' already exists.", entityId) { }
-
-    public DuplicateCardException()
-        : base("A card with the same number already exists.") { }
+    public DuplicateCardException(Guid entityId, int attempts)
+        : base($"Could not allocate a unique card number after {attempts} attempts. "
+             + "Please try again.", entityId) { }
 }

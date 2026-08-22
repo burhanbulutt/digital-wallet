@@ -129,7 +129,7 @@ public static class CardPolicy
             throw new InvalidCardException(card.Id, "a closed card cannot receive money.");
     }
 
-    // Same status transitions are rejected, cant request to freeze an already frozen card.
+    // Same status transitions dont call this method.
     public static bool CanTransitionTo(CardStatus from, CardStatus to)
         => (from, to) switch
         {
